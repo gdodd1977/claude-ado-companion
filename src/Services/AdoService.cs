@@ -28,10 +28,10 @@ public class AdoService : IAdoService
         "System.ChangedDate",
     ];
 
-    public AdoService(HttpClient httpClient, IOptions<DashboardSettings> settings, AzCliTokenService tokenService, ILogger<AdoService> logger)
+    public AdoService(HttpClient httpClient, IOptionsMonitor<DashboardSettings> settings, AzCliTokenService tokenService, ILogger<AdoService> logger)
     {
         _httpClient = httpClient;
-        _settings = settings.Value;
+        _settings = settings.CurrentValue;
         _tokenService = tokenService;
         _logger = logger;
 

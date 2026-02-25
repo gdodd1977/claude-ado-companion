@@ -22,6 +22,10 @@ builder.WebHost.UseUrls(
     builder.Configuration["Urls"] ?? "http://localhost:5200");
 
 var isDemo = args.Contains("--demo");
+var isDebug = args.Contains("--debug");
+var debugLogPath = isDebug
+    ? Path.Combine(Path.GetTempPath(), "claude-ado-companion-debug.log")
+    : null;
 
 builder.Services.Configure<DashboardSettings>(builder.Configuration.GetSection("Dashboard"));
 builder.Services.AddSingleton<AzCliTokenService>();
@@ -37,7 +41,38 @@ else
 
 builder.Services.AddSingleton<ISessionService, SessionService>();
 
+if (isDebug)
+{
+    builder.Logging.SetMinimumLevel(LogLevel.Debug);
+}
+
 var app = builder.Build();
+
+// --debug: global exception handler that logs to a temp file
+if (isDebug)
+{
+    File.WriteAllText(debugLogPath!, $"=== Claude ADO Companion Debug Log ===\nStarted: {DateTime.Now:O}\n\n");
+
+    app.Use(async (ctx, next) =>
+    {
+        try
+        {
+            await next(ctx);
+        }
+        catch (Exception ex)
+        {
+            var entry = $"[{DateTime.Now:HH:mm:ss.fff}] {ctx.Request.Method} {ctx.Request.Path}{ctx.Request.QueryString}\n" +
+                         $"  Exception: {ex.GetType().Name}: {ex.Message}\n" +
+                         $"  Stack: {ex.StackTrace}\n";
+            if (ex.InnerException != null)
+                entry += $"  Inner: {ex.InnerException.GetType().Name}: {ex.InnerException.Message}\n";
+            entry += "\n";
+
+            await File.AppendAllTextAsync(debugLogPath!, entry);
+            throw; // re-throw so normal error handling still applies
+        }
+    });
+}
 
 var embeddedProvider = new ManifestEmbeddedFileProvider(
     typeof(Program).Assembly, "wwwroot");
@@ -82,9 +117,9 @@ app.MapGet("/api/me", async (AzCliTokenService tokenService) =>
 
 // === Config Endpoint ===
 
-app.MapGet("/api/config", (Microsoft.Extensions.Options.IOptions<DashboardSettings> settings) =>
+app.MapGet("/api/config", (Microsoft.Extensions.Options.IOptionsMonitor<DashboardSettings> settings) =>
 {
-    var s = settings.Value;
+    var s = settings.CurrentValue;
     return Results.Ok(new
     {
         adoOrg = s.AdoOrg,
@@ -258,13 +293,7 @@ app.MapPost("/api/claude/launch-auth", () =>
     }
 });
 
-// === Session Endpoints ===
-
-app.MapGet("/api/sessions", async (ISessionService sessionService, int? max, bool? triageOnly) =>
-{
-    var sessions = await sessionService.ListSessionsAsync(max ?? 20, triageOnly ?? false);
-    return Results.Ok(sessions);
-});
+// === Session Endpoints (used by triage panel) ===
 
 app.MapGet("/api/sessions/active", (ISessionService sessionService) =>
 {
@@ -274,13 +303,6 @@ app.MapGet("/api/sessions/active", (ISessionService sessionService) =>
         : Results.Json(new { active = true, id });
 });
 
-app.MapGet("/api/sessions/{id}", async (string id, ISessionService sessionService) =>
-{
-    var messages = await sessionService.GetSessionAsync(id);
-    return Results.Ok(messages);
-});
-
-// SSE streaming endpoint — tails the JSONL file in real time
 app.MapGet("/api/sessions/{id}/stream", async (string id, HttpContext ctx, ISessionService sessionService) =>
 {
     ctx.Response.ContentType = "text/event-stream";
@@ -296,6 +318,21 @@ app.MapGet("/api/sessions/{id}/stream", async (string id, HttpContext ctx, ISess
         await ctx.Response.Body.FlushAsync(cancellationToken);
     }
 });
+
+// === Debug Endpoint ===
+
+if (isDebug)
+{
+    app.MapGet("/api/debug/log", async () =>
+    {
+        if (debugLogPath != null && File.Exists(debugLogPath))
+        {
+            var content = await File.ReadAllTextAsync(debugLogPath);
+            return Results.Text(content, "text/plain");
+        }
+        return Results.Text("No debug log found.", "text/plain");
+    });
+}
 
 // Fallback: serve embedded index.html for SPA-style routing
 app.MapFallback(async context =>
@@ -320,6 +357,11 @@ app.Lifetime.ApplicationStarted.Register(() =>
     if (isDemo)
     {
         Console.WriteLine("  [DEMO MODE] Using mock data — no ADO connection required");
+    }
+    if (isDebug)
+    {
+        Console.WriteLine($"  [DEBUG MODE] Logging exceptions to: {debugLogPath}");
+        Console.WriteLine($"  View log at: {url}/api/debug/log");
     }
     try
     {

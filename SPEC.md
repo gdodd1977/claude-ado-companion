@@ -10,6 +10,10 @@ Runs at `http://localhost:5200`. Ships as a single-file self-contained exe (`win
 
 ```
 install.ps1                        # Prerequisite checker (az CLI, az login, Claude CLI)
+.claude/
+  skills/
+    triage-bug/SKILL.md            # Single-bug triage skill (auto-detected by Claude)
+    triage-bugs/SKILL.md           # Batch triage skill (auto-detected by Claude)
 src/
   Program.cs                     # Minimal API host — all HTTP endpoints defined here
   Models/
@@ -98,7 +102,7 @@ Logging: the area path is logged at `Information` on every query. If WIQL return
 
 **Claude CLI:** On first triage action per session, the app checks if Claude CLI is installed and authenticated by running a quick test command. If not authenticated, it opens a terminal window (`cmd /k claude`) for the user to complete interactive login. The auth result is cached for the lifetime of the app process. In `--demo` mode, auth is always reported as successful.
 
-**Triage skills** (`.claude/commands/triage-bug.md`, `triage-bugs.md`) use `az boards` CLI commands exclusively — no MCP server dependency. The skills read ADO connection details from `appsettings.local.json` (falling back to `appsettings.json`) and use those values for all `az boards` commands.
+**Triage skills** (`.claude/skills/triage-bug/SKILL.md`, `.claude/skills/triage-bugs/SKILL.md`) use `az boards` CLI commands exclusively — no MCP server dependency. Skills are auto-detected by Claude based on their descriptions (e.g., when the user asks to assess or triage a bug) and can also be invoked manually via `/triage-bug` or `/triage-bugs`. The skills read ADO connection details from `appsettings.local.json` (falling back to `appsettings.json`) and use those values for all `az boards` commands.
 
 ### Session Viewer
 

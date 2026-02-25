@@ -1,5 +1,5 @@
 ---
-description: Batch triage all active bugs in your configured ADO area path
+description: "Batch triage all active bugs in your configured ADO area path. Queries for non-closed bugs, runs triage-bug on each, and produces an aggregate summary with statistics. Use when asked to triage multiple bugs, scan the backlog, or assess all open bugs at once."
 argument-hint: "[--tag=<filter-tag>] [--max=<count>] [--dry-run]"
 allowed-tools: Bash, Read, Grep, Glob, Skill
 model: opus

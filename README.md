@@ -26,8 +26,14 @@ It checks each prerequisite and prints what's ready vs what needs attention. It 
 
 ### Option A: Download a release (recommended)
 
+For best results, download the release **into the repo directory** so the triage panel can auto-detect Claude Code session logs. If run from elsewhere, it falls back to the most recently active Claude project.
+
 ```powershell
-# Download the latest release exe + config
+# Clone the repo (needed for Claude Code skills)
+git clone https://github.com/gdodd1977/claude-ado-companion.git
+cd claude-ado-companion
+
+# Download the latest release exe + config into the repo
 gh release download --repo gdodd1977/claude-ado-companion --dir .
 ```
 
@@ -81,7 +87,7 @@ This loads 10 sample bugs covering all triage states (Copilot Ready, Copilot Pos
 
 ## Triage Skills
 
-The companion ships with Claude Code slash commands for triaging ADO bugs. These use `az boards` CLI commands — no MCP server required. The skills read your ADO connection details from `appsettings.local.json` automatically.
+The companion ships with Claude Code skills for triaging ADO bugs. These are auto-detected by Claude when you discuss bug triage, or can be invoked manually with `/triage-bug` and `/triage-bugs`. They use `az boards` CLI commands — no MCP server required. The skills read your ADO connection details from `appsettings.local.json` automatically.
 
 | Skill | Description |
 |---|---|

@@ -1,5 +1,5 @@
 ---
-description: Triage an ADO bug - assess actionability, ROI, and Copilot agent readiness
+description: "Triage a single Azure DevOps bug work item. Scores actionability (0-100), ROI (0-100), and Copilot coding agent readiness. Applies triage tags and optionally assigns Copilot-ready bugs. Use when asked to assess, evaluate, score, or triage an ADO bug by ID."
 argument-hint: "<bug-id> [--dry-run] [--force]"
 allowed-tools: Bash, Read, Grep, Glob
 model: opus

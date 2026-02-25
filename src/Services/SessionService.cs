@@ -7,19 +7,74 @@ namespace ClaudeAdoCompanion.Services;
 
 public class SessionService : ISessionService
 {
-    private readonly DashboardSettings _settings;
+    private readonly IOptionsMonitor<DashboardSettings> _settingsMonitor;
     private readonly ILogger<SessionService> _logger;
+    private DashboardSettings _settings => _settingsMonitor.CurrentValue;
 
-    public SessionService(IOptions<DashboardSettings> settings, ILogger<SessionService> logger)
+    private readonly string _resolvedProjectsPath;
+
+    public SessionService(IOptionsMonitor<DashboardSettings> settings, ILogger<SessionService> logger)
     {
-        _settings = settings.Value;
+        _settingsMonitor = settings;
         _logger = logger;
+        _resolvedProjectsPath = ResolveProjectsPath(settings.CurrentValue.ClaudeProjectsPath);
+    }
+
+    private string ResolveProjectsPath(string configured)
+    {
+        if (!string.IsNullOrWhiteSpace(configured) && Directory.Exists(configured))
+            return configured;
+
+        var claudeProjectsRoot = Path.Combine(
+            Environment.GetFolderPath(Environment.SpecialFolder.UserProfile),
+            ".claude", "projects");
+
+        // Strategy 1: Derive from repo root (fast, exact match)
+        var dir = AppContext.BaseDirectory;
+        while (dir != null && !Directory.Exists(Path.Combine(dir, ".git")))
+            dir = Directory.GetParent(dir)?.FullName;
+
+        if (dir != null)
+        {
+            var claudeDir = Path.Combine(claudeProjectsRoot,
+                dir.Replace(":", "-").Replace(Path.DirectorySeparatorChar, '-').Replace('/', '-'));
+
+            if (Directory.Exists(claudeDir))
+            {
+                _logger.LogInformation("Auto-detected Claude projects path from repo root: {Path}", claudeDir);
+                return claudeDir;
+            }
+        }
+
+        // Strategy 2: Scan ~/.claude/projects/ for the directory with the most recent .jsonl file
+        if (Directory.Exists(claudeProjectsRoot))
+        {
+            var mostRecent = Directory.GetDirectories(claudeProjectsRoot)
+                .Select(d => new
+                {
+                    Path = d,
+                    Latest = Directory.GetFiles(d, "*.jsonl").DefaultIfEmpty()
+                        .Max(f => f != null ? File.GetLastWriteTimeUtc(f) : DateTime.MinValue)
+                })
+                .Where(x => x.Latest > DateTime.MinValue)
+                .OrderByDescending(x => x.Latest)
+                .FirstOrDefault();
+
+            if (mostRecent != null)
+            {
+                _logger.LogInformation("Auto-detected Claude projects path from most recent activity: {Path}", mostRecent.Path);
+                return mostRecent.Path;
+            }
+        }
+
+        _logger.LogWarning("Could not auto-detect Claude projects path");
+        return configured;
     }
 
     public Task<List<SessionSummary>> ListSessionsAsync(int max = 20, bool triageOnly = false)
     {
         var results = new List<SessionSummary>();
-        var dir = _settings.ClaudeProjectsPath;
+        var dir = _resolvedProjectsPath;
 
         if (!Directory.Exists(dir))
         {
@@ -68,7 +123,7 @@ public class SessionService : ISessionService
     public Task<List<SessionMessage>> GetSessionAsync(string sessionId)
     {
         var messages = new List<SessionMessage>();
-        var filePath = Path.Combine(_settings.ClaudeProjectsPath, $"{sessionId}.jsonl");
+        var filePath = Path.Combine(_resolvedProjectsPath, $"{sessionId}.jsonl");
 
         if (!File.Exists(filePath))
         {
@@ -106,7 +161,7 @@ public class SessionService : ISessionService
         }
 
         // Also try to read subagent files
-        var subagentsDir = Path.Combine(_settings.ClaudeProjectsPath, sessionId, "subagents");
+        var subagentsDir = Path.Combine(_resolvedProjectsPath, sessionId, "subagents");
         if (Directory.Exists(subagentsDir))
         {
             foreach (var subFile in Directory.GetFiles(subagentsDir, "*.jsonl").OrderBy(f => f))
@@ -121,7 +176,7 @@ public class SessionService : ISessionService
 
     public string? GetActiveSessionId()
     {
-        var dir = _settings.ClaudeProjectsPath;
+        var dir = _resolvedProjectsPath;
         if (!Directory.Exists(dir))
         {
             return null;
@@ -150,7 +205,7 @@ public class SessionService : ISessionService
         string sessionId,
         [EnumeratorCancellation] CancellationToken cancellationToken)
     {
-        var filePath = Path.Combine(_settings.ClaudeProjectsPath, $"{sessionId}.jsonl");
+        var filePath = Path.Combine(_resolvedProjectsPath, $"{sessionId}.jsonl");
 
         if (!File.Exists(filePath))
         {

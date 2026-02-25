@@ -58,13 +58,7 @@
   <!-- Main Content -->
   <div class="main-content">
 
-    <!-- Tabs -->
-    <div class="tab-bar">
-      <button class="tab-btn active" data-tab="bugs" onclick="switchTab('bugs')">Bugs</button>
-      <button class="tab-btn" data-tab="sessions" onclick="switchTab('sessions')">Sessions</button>
-    </div>
-
-    <!-- Bugs Tab -->
+    <!-- Bugs -->
     <div class="tab-panel active" id="tab-bugs">
       <div class="toolbar">
         <div class="toolbar-left">
@@ -106,31 +100,6 @@
               <tr><td colspan="6" class="loading"><div class="spinner"></div> Loading bugs...</td></tr>
             </tbody>
           </table>
-        </div>
-      </div>
-    </div>
-
-    <!-- Sessions Tab -->
-    <div class="tab-panel" id="tab-sessions">
-      <!-- Sessions toolbar -->
-      <div class="toolbar">
-        <div class="toolbar-left">
-          <button class="btn" id="liveBtn" onclick="toggleLive()">
-            <span class="live-dot" id="liveDot"></span> Live
-          </button>
-          <button class="btn" onclick="loadSessions()">
-            <span>&#8635;</span> Refresh
-          </button>
-          <span class="count-badge" id="liveStatus"></span>
-        </div>
-      </div>
-
-      <div class="sessions-layout">
-        <div class="card session-list" id="sessionList">
-          <div class="loading"><div class="spinner"></div> Loading sessions...</div>
-        </div>
-        <div class="card session-detail" id="sessionDetail">
-          <div class="session-detail-empty">Select a session or click Live to stream the active session</div>
         </div>
       </div>
     </div>

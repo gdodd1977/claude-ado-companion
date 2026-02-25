@@ -5,12 +5,6 @@ let currentSort = { key: 'roi', dir: 'desc' };
 let currentUserName = '';
 let showOnlyMine = false;
 
-// Live streaming state
-let liveEventSource = null;
-let liveSessionId = null;
-let isLive = false;
-let liveMessageCount = 0;
-
 // Triage modal state
 let triageEventSource = null;
 let triageMessageCount = 0;
@@ -67,7 +61,14 @@ async function loadBugs() {
     renderBugs();
     showToast(`Loaded ${bugs.length} bugs`, 'success');
   } catch (err) {
-    tbody.innerHTML = `<tr><td colspan="6" class="loading" style="color:var(--score-low)">${escapeHtml(err.message)}</td></tr>`;
+    const is401 = err.message.includes('401');
+    const hint = is401
+      ? `<br><br>This usually means your ADO connection details are wrong or your <code>az login</code> has expired.`
+      : '';
+    tbody.innerHTML = `<tr><td colspan="6" class="loading" style="color:var(--score-low)">
+      ${escapeHtml(err.message)}${hint}
+      <br><br><button class="btn btn-primary" onclick="openSettings()">Open Settings</button>
+    </td></tr>`;
     showToast('Failed to load bugs', 'error');
   }
 }
@@ -448,149 +449,6 @@ function closeTriageModal() {
   triageMessageCount = 0;
 
   loadBugs();
-}
-
-// ===== Tabs =====
-function switchTab(tab) {
-  document.querySelectorAll('.tab-btn').forEach(b => {
-    b.classList.toggle('active', b.dataset.tab === tab);
-  });
-  document.querySelectorAll('.tab-panel').forEach(p => {
-    p.classList.toggle('active', p.id === `tab-${tab}`);
-  });
-
-  if (tab === 'sessions') {
-    loadSessions();
-  } else {
-    if (isLive) disconnectLive();
-  }
-}
-
-// ===== Sessions Tab =====
-async function loadSessions() {
-  const list = document.getElementById('sessionList');
-  list.innerHTML = '<div class="loading"><div class="spinner"></div> Loading sessions...</div>';
-
-  try {
-    const sessions = await fetch('/api/sessions').then(r => r.json());
-
-    if (sessions.length === 0) {
-      list.innerHTML = '<div class="loading">No sessions found</div>';
-      return;
-    }
-
-    list.innerHTML = sessions.map(s => {
-      const isActive = s.id === liveSessionId;
-      return `
-      <div class="session-item ${isActive ? 'active' : ''}" data-id="${escapeHtml(s.id)}" onclick="loadSession('${escapeHtml(s.id)}')">
-        <div class="session-time">${formatDate(s.timestamp)}</div>
-        <div class="session-preview">${escapeHtml(s.preview || 'Session ' + s.id.slice(0, 8))}</div>
-      </div>`;
-    }).join('');
-  } catch (err) {
-    list.innerHTML = `<div class="loading" style="color:var(--score-low)">${escapeHtml(err.message)}</div>`;
-  }
-}
-
-async function loadSession(id) {
-  if (isLive) disconnectLive();
-
-  document.querySelectorAll('.session-item').forEach(el => {
-    el.classList.toggle('active', el.dataset.id === id);
-  });
-
-  const detail = document.getElementById('sessionDetail');
-  detail.innerHTML = '<div class="loading"><div class="spinner"></div> Loading session...</div>';
-
-  try {
-    const messages = await fetch(`/api/sessions/${encodeURIComponent(id)}`).then(r => r.json());
-
-    if (messages.length === 0) {
-      detail.innerHTML = '<div class="session-detail-empty">No messages in this session</div>';
-      return;
-    }
-
-    detail.innerHTML = messages.map((msg, i) => renderMessage(msg, i)).join('');
-    detail.scrollTop = detail.scrollHeight;
-  } catch (err) {
-    detail.innerHTML = `<div class="loading" style="color:var(--score-low)">${escapeHtml(err.message)}</div>`;
-  }
-}
-
-// ===== Live Streaming =====
-async function toggleLive() {
-  if (isLive) {
-    disconnectLive();
-    return;
-  }
-
-  try {
-    const res = await fetch('/api/sessions/active').then(r => r.json());
-    if (!res.active) {
-      showToast('No active session found (must be modified within last 5 min)', 'info');
-      return;
-    }
-
-    connectLive(res.id);
-  } catch (err) {
-    showToast(`Failed to find active session: ${err.message}`, 'error');
-  }
-}
-
-function connectLive(sessionId) {
-  liveSessionId = sessionId;
-  isLive = true;
-  liveMessageCount = 0;
-
-  document.getElementById('liveBtn').classList.add('btn-live-active');
-  document.getElementById('liveDot').classList.add('pulsing');
-
-  const status = document.getElementById('liveStatus');
-  status.textContent = 'Connecting...';
-
-  const detail = document.getElementById('sessionDetail');
-  detail.innerHTML = '';
-
-  document.querySelectorAll('.session-item').forEach(el => {
-    el.classList.toggle('active', el.dataset.id === sessionId);
-  });
-
-  liveEventSource = new EventSource(`/api/sessions/${encodeURIComponent(sessionId)}/stream`);
-
-  liveEventSource.onmessage = (event) => {
-    try {
-      const msg = JSON.parse(event.data);
-      liveMessageCount++;
-      status.textContent = `Streaming: ${liveMessageCount} messages`;
-
-      detail.insertAdjacentHTML('beforeend', renderMessage(msg, liveMessageCount));
-      detail.scrollTop = detail.scrollHeight;
-    } catch (e) {
-      console.error('Failed to parse SSE message:', e);
-    }
-  };
-
-  liveEventSource.onerror = () => {
-    status.textContent = `Streaming: ${liveMessageCount} messages (reconnecting...)`;
-  };
-
-  showToast(`Live streaming session ${sessionId.slice(0, 8)}...`, 'info');
-}
-
-function disconnectLive() {
-  if (liveEventSource) {
-    liveEventSource.close();
-    liveEventSource = null;
-  }
-
-  isLive = false;
-  liveSessionId = null;
-
-  document.getElementById('liveBtn').classList.remove('btn-live-active');
-  document.getElementById('liveDot').classList.remove('pulsing');
-  document.getElementById('liveStatus').textContent = '';
-
-  showToast('Disconnected from live stream', 'info');
 }
 
 // ===== Message Rendering =====
