@@ -33,8 +33,8 @@ For best results, download the release **into the repo directory** so the triage
 git clone https://github.com/gdodd1977/claude-ado-companion.git
 cd claude-ado-companion
 
-# Download the latest release exe + config into the repo
-gh release download --repo gdodd1977/claude-ado-companion --dir .
+# Download the latest release assets into the repo
+gh release download --repo gdodd1977/claude-ado-companion --pattern "*" --dir .
 ```
 
 Then run the exe directly:
