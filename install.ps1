@@ -13,7 +13,7 @@ $ErrorActionPreference = 'SilentlyContinue'
 
 Write-Host ""
 Write-Host "========================================" -ForegroundColor Cyan
-Write-Host "  Copilot Flows - Prerequisite Check"    -ForegroundColor Cyan
+Write-Host "  Claude ADO Companion - Prerequisite Check" -ForegroundColor Cyan
 Write-Host "========================================" -ForegroundColor Cyan
 Write-Host ""
 

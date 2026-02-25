@@ -2,9 +2,9 @@
 
 ## Overview
 
-A self-contained ASP.NET 8 web app that serves a bug triage dashboard and Claude Code session viewer for the Copilot Flows team. It connects to Azure DevOps (ADO) to display bugs, and reads local Claude Code JSONL session files for the session viewer.
+A self-contained ASP.NET 8 web app that serves a bug triage dashboard and Claude Code session viewer for any Azure DevOps team. It connects to ADO to display bugs, and reads local Claude Code JSONL session files for the session viewer.
 
-Runs at `http://localhost:5200`. Ships as a single-file self-contained exe (`win-x64`). Has a `--demo` mode with mock data for UI preview without ADO access.
+Runs at `http://localhost:5200`. Ships as a single-file self-contained exe (`win-x64`). Has a `--demo` mode with mock data for UI preview without ADO access. On first run, presents a setup form for ADO connection details; settings are persisted to `appsettings.local.json`.
 
 ## Architecture
 
@@ -15,7 +15,7 @@ src/
   Models/
     DashboardSettings.cs         # Config POCO bound from appsettings.json "Dashboard" section
     TriagedBug.cs                # Core bug model returned by /api/bugs
-    TriageStatus.cs              # Tag-derived triage state (replaces old numeric TriageScores)
+    TriageStatus.cs              # Tag-derived triage state
     AdoResponses.cs              # ADO REST API response DTOs (WIQL, batch, work item)
     SessionMessage.cs            # Single message in a Claude Code session
     SessionSummary.cs            # Lightweight session list entry (id, timestamp, preview)
@@ -35,9 +35,15 @@ src/
 
 ## Key Concepts
 
+### Configuration & First-Run Setup
+
+On first launch, `DashboardSettings.IsConfigured` returns `false` (all defaults are empty strings). The frontend detects this via `GET /api/config` and shows a setup form instead of the bug table. On submit, `POST /api/config` writes the user's settings to `appsettings.local.json`, which is loaded as an additional config source and gitignored.
+
+A settings gear icon in the header lets users reopen the form at any time with current values pre-filled.
+
 ### Triage Model (tag-based)
 
-The CopilotFlow pipeline applies tags directly to ADO work items. The companion reads triage status from `System.Tags` — no per-bug comment fetching needed.
+Triage skills apply tags directly to ADO work items. The companion reads triage status from `System.Tags` — no per-bug comment fetching needed.
 
 **Known triage tags:** `triaged`, `needs-info`, `high-roi`, `copilot-ready`, `copilot-possible`, `human-required`
 
@@ -55,10 +61,10 @@ public class TriageStatus
 
 ### Bug Lifecycle
 
-1. User triggers "Run Claude Analysis" or "Re-triage" from the dashboard (or pipeline runs externally)
+1. User triggers "Run Claude Analysis" or "Re-triage" from the dashboard
 2. Claude CLI analyzes the bug and applies triage tags to the ADO work item
 3. Dashboard fetches bugs via WIQL + batch work item API, parses tags inline in `MapWorkItem()`
-4. User can "Assign to Copilot" — patches `System.AssignedTo` to the Copilot user ID, adds `copilot-ready` tag, links the main branch
+4. User can "Assign to Copilot" — patches `System.AssignedTo` to the configured Copilot user ID, adds `copilot-ready` tag, links the configured branch
 
 ### In-App Triage (fire-and-forget with live streaming)
 
@@ -78,7 +84,7 @@ In `--demo` mode, the auth check is bypassed and the panel shows a demo placehol
 
 ### ADO API Flow (AdoService)
 
-1. **WIQL query** — `POST _apis/wit/wiql` — gets bug IDs in the configured area path (non-Closed, ordered by ChangedDate DESC, capped at `MaxBugsDefault`)
+1. **WIQL query** — `POST _apis/wit/wiql` — gets bug IDs in the configured area path (non-Closed, ordered by ChangedDate DESC, capped at `MaxBugsDefault`). Optionally filters by `IterationPath` if configured.
 2. **Batch fetch** — `POST _apis/wit/workitemsbatch` — fetches fields in chunks of 200
 3. **MapWorkItem** — maps ADO fields to `TriagedBug`, calls `TriageTagParser.ParseTags()` on `System.Tags`
 
@@ -92,7 +98,7 @@ Logging: the area path is logged at `Information` on every query. If WIQL return
 
 **Claude CLI:** On first triage action per session, the app checks if Claude CLI is installed and authenticated by running a quick test command. If not authenticated, it opens a terminal window (`cmd /k claude`) for the user to complete interactive login. The auth result is cached for the lifetime of the app process. In `--demo` mode, auth is always reported as successful.
 
-**Triage skills** (`.claude/commands/triage-bug.md`, `triage-bugs.md`) use `az boards` CLI commands exclusively — no MCP server dependency. The triage skills fetch work items via `az boards work-item show` and update tags via `az boards work-item update`.
+**Triage skills** (`.claude/commands/triage-bug.md`, `triage-bugs.md`) use `az boards` CLI commands exclusively — no MCP server dependency. The skills read ADO connection details from `appsettings.local.json` (falling back to `appsettings.json`) and use those values for all `az boards` commands.
 
 ### Session Viewer
 
@@ -106,7 +112,8 @@ Logging: the area path is logged at `Information` on every query. If WIQL return
 | Method | Path | Description |
 |--------|------|-------------|
 | GET | `/api/me` | Current user display name (from `az account show`) |
-| GET | `/api/config` | Read-only config dump (AdoOrg, AdoProject, AreaPath, MaxBugsDefault, ClaudeWorkingDirectory, demo flag) |
+| GET | `/api/config` | Config dump including `isConfigured` flag, all Dashboard settings, and demo flag |
+| POST | `/api/config` | Save settings to `appsettings.local.json` |
 | GET | `/api/claude/status` | Check if Claude CLI is installed and authenticated (cached) |
 | POST | `/api/claude/launch-auth` | Open a terminal window for interactive Claude login |
 | GET | `/api/bugs` | All open bugs with triage status |
@@ -120,6 +127,9 @@ Logging: the area path is logged at `Information` on every query. If WIQL return
 | GET | `/api/sessions/{id}/stream` | SSE stream of session messages |
 
 ## Frontend (app.js)
+
+### First-Run Flow
+On load, fetches `GET /api/config`. If `isConfigured` is `false` and not in demo mode, shows the setup banner (modal form) instead of the bug table. On submit, POSTs settings and reloads the page.
 
 ### Table Columns
 ID | Title | Sev | ROI | Copilot | Actions
@@ -145,23 +155,28 @@ A floating panel docked to the bottom-right of the screen (`position: fixed; bot
 - Scrollable message body (`overscroll-behavior: contain`) that renders streamed session messages using the same `renderMessage()` function as the sessions tab
 - Polls for active session, connects via SSE, auto-scrolls to latest message
 - When SSE stream closes (triage complete), shows a success toast and auto-refreshes the bug list
-- Minimize collapses the panel to just its header bar; click minimize again (□ → –) to restore
+- Minimize collapses the panel to just its header bar; click minimize again to restore
 - Close stops the stream and refreshes bugs
 
-## Configuration (appsettings.json → DashboardSettings)
+## Configuration (DashboardSettings)
+
+All settings default to empty strings. On first run, the setup UI collects values and writes them to `appsettings.local.json` (gitignored). The app loads config from `appsettings.json` (defaults) → `appsettings.local.json` (user overrides).
 
 | Key | Default | Description |
 |-----|---------|-------------|
-| `AdoOrg` | `https://msazure.visualstudio.com` | ADO organization URL |
-| `AdoProject` | `One` | ADO project name |
-| `AreaPath` | `One\Azure\Flow\DAX\AI First Experiences` | Bug area path filter |
-| `CopilotUserId` | (GUID) | AAD object ID for the Copilot service account |
-| `RepoProjectGuid` | (GUID) | ADO project GUID for branch linking |
-| `RepoGuid` | (GUID) | ADO repo GUID for branch linking |
+| `AdoOrg` | `""` | ADO organization URL (e.g., `https://dev.azure.com/myorg`) |
+| `AdoProject` | `""` | ADO project name |
+| `AreaPath` | `""` | Bug area path filter |
+| `IterationPath` | `null` | Optional sprint/iteration path filter |
+| `CopilotUserId` | `""` | AAD object ID for the Copilot service account |
+| `RepoProjectGuid` | `""` | ADO project GUID for branch linking |
+| `RepoGuid` | `""` | ADO repo GUID for branch linking |
 | `BranchRef` | `GBmain` | Branch ref for Copilot assignment linking |
+| `TriagePipelineName` | `""` | Pipeline name (reserved for future use) |
 | `MaxBugsDefault` | `100` | Max bugs returned by WIQL |
-| `ClaudeWorkingDirectory` | `C:\Repos\CopilotFlow` | Working directory for Claude CLI (where triage skills live) |
-| `ClaudeProjectsPath` | `~/.claude/projects/C--Repos-CopilotFlow` | Path to Claude Code session JSONL files |
+| `ClaudeProjectsPath` | `""` | Path to Claude Code session JSONL files (auto-detected if empty) |
+
+`IsConfigured` returns `true` when `AdoOrg`, `AdoProject`, and `AreaPath` are all non-empty.
 
 ## NuGet Dependencies
 
