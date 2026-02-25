@@ -373,6 +373,24 @@ app.Lifetime.ApplicationStarted.Register(() =>
     }
 });
 
-app.Run();
+try
+{
+    app.Run();
+}
+catch (IOException ex) when (ex.InnerException is System.Net.Sockets.SocketException)
+{
+    Console.ForegroundColor = ConsoleColor.Red;
+    Console.WriteLine();
+    Console.WriteLine("ERROR: Port 5200 is already in use.");
+    Console.WriteLine("Another instance of Claude ADO Companion may already be running.");
+    Console.WriteLine();
+    Console.ResetColor();
+    Console.WriteLine("To fix this, either:");
+    Console.WriteLine("  1. Close the other instance and try again");
+    Console.WriteLine("  2. Open http://localhost:5200 in your browser (it may already be running)");
+    Console.WriteLine();
+    Console.WriteLine("Press any key to exit...");
+    Console.ReadKey(true);
+}
 
 record BatchTriageRequest(int? Max);

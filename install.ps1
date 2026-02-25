@@ -120,7 +120,8 @@ if ($exeExists) {
         param([string]$ShortcutPath)
         $ws = New-Object -ComObject WScript.Shell
         $sc = $ws.CreateShortcut($ShortcutPath)
-        $sc.TargetPath = $exePath
+        $sc.TargetPath = "cmd.exe"
+        $sc.Arguments = "/k `"$exePath`""
         $sc.WorkingDirectory = $PSScriptRoot
         $sc.Description = "Claude ADO Companion - Bug Triage Dashboard"
         $sc.Save()
