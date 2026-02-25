@@ -54,21 +54,56 @@ dotnet run
 
 ### First-run setup
 
-On first launch the app opens a **setup form** prompting for your ADO connection details:
+On first launch the app opens a **setup form** prompting for your ADO connection details. Click the gear icon in the header to change settings at any time.
 
-| Field | Required | Example |
-|-------|----------|---------|
-| ADO Organization URL | Yes | `https://dev.azure.com/myorg` |
-| Project | Yes | `MyProject` |
-| Area Path | Yes | `MyProject\Team\Component` |
-| Sprint / Iteration Path | No | `MyProject\Sprint 42` |
-| Copilot User ID | No | GUID of the Copilot service account |
-| Repo Project GUID | No | For branch linking on Copilot assignment |
-| Repo GUID | No | For branch linking on Copilot assignment |
-| Branch Ref | No | Default: `GBmain` |
-| Max Bugs | No | Default: `100` |
+#### Required settings
 
-Settings are saved to `appsettings.local.json` (gitignored). Click the gear icon in the header to change settings at any time.
+| Field | Example | Where to find it |
+|-------|---------|-------------------|
+| ADO Organization URL | `https://dev.azure.com/myorg` | Your browser URL when viewing any ADO page |
+| Project | `MyProject` | The project name in the ADO URL after the org |
+| Area Path | `MyProject\Team\Component` | ADO > Project Settings > Boards > Team configuration > Areas |
+
+#### Optional settings (for Copilot assignment)
+
+These are only needed if you want the "Assign to Copilot" button to work. Without them, the button will tag the bug as `copilot-ready` but skip the actual assignment.
+
+| Field | Example | Where to find it |
+|-------|---------|-------------------|
+| Copilot User ID | `66dda6c5-...@72f988bf-...` | See [Finding the Copilot User ID](#finding-the-copilot-user-id) below |
+| Repo Project GUID | `b32aa71e-8ed2-41b2-...` | See [Finding the Repo GUIDs](#finding-the-repo-guids) below |
+| Repo GUID | `a1b2c3d4-...` | Same as above |
+| Branch Ref | `GBmain` | Default works for most repos (`GB` prefix + branch name) |
+| Sprint / Iteration Path | `MyProject\Sprint 42` | ADO > Project Settings > Boards > Team configuration > Iterations |
+| Max Bugs | `100` | Maximum bugs to load in the dashboard |
+
+#### Finding the Copilot User ID
+
+The Copilot User ID is the Azure AD identity of the GitHub Copilot service account in your ADO org. To find it:
+
+1. Find a work item that is already assigned to GitHub Copilot in your project
+2. Run the following command (replace the work item ID and org):
+   ```powershell
+   az boards work-item show --id <work-item-id> --org <your-org-url> --project <your-project> -o json
+   ```
+3. In the output, look for `System.AssignedTo.uniqueName` — it will look like `66dda6c5-07d0-4484-9979-116241219397@72f988bf-86f1-41af-91ab-2d7cd011db47`
+4. Paste that full value into the **Copilot User ID** field
+
+If you don't have Copilot set up in your ADO org yet, leave this blank — you can add it later via the settings gear.
+
+#### Finding the Repo GUIDs
+
+The Repo Project GUID and Repo GUID are used to link a branch to the work item when assigning to Copilot. To find them:
+
+1. Run the following to list repos in your project:
+   ```powershell
+   az repos list --org <your-org-url> --project <your-project> -o json --query "[].{name:name, id:id, project:project.id}"
+   ```
+2. Find your repo in the list:
+   - **Repo GUID** = the `id` field
+   - **Repo Project GUID** = the `project` field
+
+Settings are saved to `appsettings.local.json` (gitignored).
 
 ### Open the dashboard
 

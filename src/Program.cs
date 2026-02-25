@@ -193,8 +193,8 @@ app.MapGet("/api/bugs/{id:int}", async (int id, IAdoService adoService) =>
 
 app.MapPost("/api/bugs/{id:int}/assign-copilot", async (int id, IAdoService adoService) =>
 {
-    await adoService.AssignToCopilotAsync(id);
-    return Results.Ok(new { success = true, message = $"Bug {id} assigned to Copilot" });
+    var result = await adoService.AssignToCopilotAsync(id);
+    return Results.Ok(new { success = true, result.Assigned, result.BranchLinked, result.Message });
 });
 
 app.MapPost("/api/bugs/{id:int}/retriage", async (int id, IAdoService adoService) =>
