@@ -1,0 +1,9 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add SPEC.md src/Program.cs src/Services/AdoService.cs src/wwwroot/css/styles.css src/wwwroot/index.html src/wwwroot/js/app.js)",
+      "Bash(git commit:*)",
+      "Bash(git push)"
+    ]
+  }
+}

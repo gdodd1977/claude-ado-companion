@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Claude ADO Companion</title>
+  <link rel="stylesheet" href="/css/styles.css">
+</head>
+<body>
+
+  <!-- Header -->
+  <header class="app-header">
+    <h1>Claude ADO Companion</h1>
+    <button class="btn btn-sm btn-icon settings-gear" title="Settings" onclick="openSettings()">&#9881;</button>
+  </header>
+
+  <!-- Setup / Settings Banner -->
+  <div class="setup-banner hidden" id="setupBanner">
+    <div class="setup-card">
+      <h2>Welcome — Configure Your ADO Connection</h2>
+      <p>Enter your Azure DevOps details to get started. All settings are saved locally.</p>
+      <form id="settingsForm" onsubmit="saveSettings(event)">
+        <label class="setup-label" for="cfg-adoOrg">ADO Organization URL <span class="required">*</span></label>
+        <input id="cfg-adoOrg" type="text" placeholder="https://dev.azure.com/yourorg" required>
+
+        <label class="setup-label" for="cfg-adoProject">Project <span class="required">*</span></label>
+        <input id="cfg-adoProject" type="text" placeholder="MyProject" required>
+
+        <label class="setup-label" for="cfg-areaPath">Area Path <span class="required">*</span></label>
+        <input id="cfg-areaPath" type="text" placeholder="MyProject\Team\Component" required>
+
+        <label class="setup-label" for="cfg-iterationPath">Sprint / Iteration Path <span class="optional">(optional)</span></label>
+        <input id="cfg-iterationPath" type="text" placeholder="MyProject\Sprint 42">
+
+        <label class="setup-label" for="cfg-copilotUserId">Copilot User ID <span class="optional">(optional)</span></label>
+        <input id="cfg-copilotUserId" type="text" placeholder="guid@tenant">
+
+        <label class="setup-label" for="cfg-repoProjectGuid">Repo Project GUID <span class="optional">(optional)</span></label>
+        <input id="cfg-repoProjectGuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+
+        <label class="setup-label" for="cfg-repoGuid">Repo GUID <span class="optional">(optional)</span></label>
+        <input id="cfg-repoGuid" type="text" placeholder="xxxxxxxx-xxxx-xxxx-xxxx-xxxxxxxxxxxx">
+
+        <label class="setup-label" for="cfg-branchRef">Branch Ref <span class="optional">(optional)</span></label>
+        <input id="cfg-branchRef" type="text" placeholder="GBmain">
+
+        <label class="setup-label" for="cfg-maxBugs">Max Bugs <span class="optional">(default: 100)</span></label>
+        <input id="cfg-maxBugs" type="number" placeholder="100" min="1" max="1000">
+
+        <div class="setup-actions">
+          <button type="submit" class="btn btn-primary">Save &amp; Restart</button>
+          <button type="button" class="btn" onclick="closeSettings()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- Main Content -->
+  <div class="main-content">
+
+    <!-- Tabs -->
+    <div class="tab-bar">
+      <button class="tab-btn active" data-tab="bugs" onclick="switchTab('bugs')">Bugs</button>
+      <button class="tab-btn" data-tab="sessions" onclick="switchTab('sessions')">Sessions</button>
+    </div>
+
+    <!-- Bugs Tab -->
+    <div class="tab-panel active" id="tab-bugs">
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <button class="btn" onclick="loadBugs()">
+            <span>&#8635;</span> Refresh
+          </button>
+          <button class="btn btn-primary" onclick="batchTriage()">
+            <span>&#9654;</span> Run Claude Analysis
+          </button>
+          <span class="count-badge" id="bugCount"></span>
+        </div>
+        <div class="toolbar-right">
+          <button class="chip" id="myBugsToggle" onclick="toggleMyBugs()">Assigned to Me</button>
+          <div class="filter-chips">
+            <button class="chip active" data-filter="all" onclick="setFilter('all')">All</button>
+            <button class="chip" data-filter="triaged" onclick="setFilter('triaged')">Triaged</button>
+            <button class="chip" data-filter="untriaged" onclick="setFilter('untriaged')">Untriaged</button>
+            <button class="chip" data-filter="copilot-ready" onclick="setFilter('copilot-ready')">Copilot Ready</button>
+            <button class="chip" data-filter="copilot-possible" onclick="setFilter('copilot-possible')">Copilot Possible</button>
+            <button class="chip" data-filter="human-required" onclick="setFilter('human-required')">Human Required</button>
+          </div>
+        </div>
+      </div>
+
+      <div class="card">
+        <div class="table-wrapper">
+          <table>
+            <thead>
+              <tr>
+                <th data-sort="id" onclick="sortBy('id')">ID <span class="sort-indicator">&#9650;</span></th>
+                <th data-sort="title" onclick="sortBy('title')">Title <span class="sort-indicator">&#9650;</span></th>
+                <th data-sort="severity" onclick="sortBy('severity')">Sev <span class="sort-indicator">&#9650;</span></th>
+                <th data-sort="roi" onclick="sortBy('roi')">ROI <span class="sort-indicator">&#9650;</span></th>
+                <th data-sort="copilotReadiness" onclick="sortBy('copilotReadiness')">Copilot <span class="sort-indicator">&#9650;</span></th>
+                <th>Actions</th>
+              </tr>
+            </thead>
+            <tbody id="bugsTable">
+              <tr><td colspan="6" class="loading"><div class="spinner"></div> Loading bugs...</td></tr>
+            </tbody>
+          </table>
+        </div>
+      </div>
+    </div>
+
+    <!-- Sessions Tab -->
+    <div class="tab-panel" id="tab-sessions">
+      <!-- Sessions toolbar -->
+      <div class="toolbar">
+        <div class="toolbar-left">
+          <button class="btn" id="liveBtn" onclick="toggleLive()">
+            <span class="live-dot" id="liveDot"></span> Live
+          </button>
+          <button class="btn" onclick="loadSessions()">
+            <span>&#8635;</span> Refresh
+          </button>
+          <span class="count-badge" id="liveStatus"></span>
+        </div>
+      </div>
+
+      <div class="sessions-layout">
+        <div class="card session-list" id="sessionList">
+          <div class="loading"><div class="spinner"></div> Loading sessions...</div>
+        </div>
+        <div class="card session-detail" id="sessionDetail">
+          <div class="session-detail-empty">Select a session or click Live to stream the active session</div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <!-- Toast -->
+  <div class="toast" id="toast"></div>
+
+  <!-- Triage Analysis Panel (floating, non-blocking) -->
+  <div class="triage-panel hidden" id="triageModal">
+    <div class="triage-modal-header">
+      <h2>Claude Analysis</h2>
+      <span class="triage-modal-status" id="triageModalStatus">Starting...</span>
+      <button class="btn btn-sm btn-icon" title="Minimize" onclick="minimizeTriagePanel()">&#8211;</button>
+      <button class="btn btn-sm btn-icon" onclick="closeTriageModal()">&times;</button>
+    </div>
+    <div class="triage-modal-body" id="triageModalBody">
+      <div class="loading"><div class="spinner"></div> Waiting for Claude session to start...</div>
+    </div>
+  </div>
+
+  <script src="/js/app.js"></script>
+</body>
+</html>
