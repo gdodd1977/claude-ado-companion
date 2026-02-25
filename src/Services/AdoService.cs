@@ -105,9 +105,13 @@ public class AdoService : IAdoService
         return MapWorkItem(workItem);
     }
 
-    public async Task AssignToCopilotAsync(int id)
+    public async Task<AssignCopilotResult> AssignToCopilotAsync(int id)
     {
         await ConfigureAuthAsync();
+
+        var assigned = !string.IsNullOrWhiteSpace(_settings.CopilotUserId);
+        var branchLinked = !string.IsNullOrWhiteSpace(_settings.RepoProjectGuid)
+                           && !string.IsNullOrWhiteSpace(_settings.RepoGuid);
 
         // Build patch operations: assign to Copilot + link main branch + add copilot-ready tag
         var currentBug = await GetBugAsync(id);
@@ -117,11 +121,19 @@ public class AdoService : IAdoService
         tagSet.Add("copilot-ready");
         var mergedTags = string.Join("; ", tagSet);
 
-        var patchOps = new object[]
+        var patchOps = new List<object>
         {
-            new { op = "add", path = "/fields/System.AssignedTo", value = _settings.CopilotUserId },
             new { op = "add", path = "/fields/System.Tags", value = mergedTags },
-            new
+        };
+
+        if (assigned)
+        {
+            patchOps.Add(new { op = "add", path = "/fields/System.AssignedTo", value = _settings.CopilotUserId });
+        }
+
+        if (branchLinked)
+        {
+            patchOps.Add(new
             {
                 op = "add",
                 path = "/relations/-",
@@ -131,8 +143,8 @@ public class AdoService : IAdoService
                     url = $"vstfs:///Git/Ref/{_settings.RepoProjectGuid}/{_settings.RepoGuid}/{_settings.BranchRef}",
                     attributes = new { name = "Branch" },
                 },
-            },
-        };
+            });
+        }
 
         var request = new HttpRequestMessage(HttpMethod.Patch,
             $"{_settings.AdoOrg}/{_settings.AdoProject}/_apis/wit/workitems/{id}?api-version=7.1");
@@ -141,6 +153,13 @@ public class AdoService : IAdoService
 
         var response = await _httpClient.SendAsync(request);
         response.EnsureSuccessStatusCode();
+
+        var parts = new List<string> { "Tagged copilot-ready" };
+        if (assigned) parts.Add("assigned to Copilot");
+        else parts.Add("Copilot User ID not configured — skipped assignment");
+        if (branchLinked) parts.Add("branch linked");
+
+        return new AssignCopilotResult(assigned, branchLinked, string.Join("; ", parts));
     }
 
     public Task RetriageAsync(int id)

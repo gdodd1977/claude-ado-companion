@@ -220,8 +220,9 @@ async function assignCopilot(id) {
 
   try {
     showToast(`Assigning bug #${id} to Copilot...`, 'info');
-    await apiFetch(`/api/bugs/${id}/assign-copilot`, { method: 'POST' });
-    showToast(`Bug #${id} assigned to Copilot`, 'success');
+    const res = await apiFetch(`/api/bugs/${id}/assign-copilot`, { method: 'POST' });
+    const type = res.assigned ? 'success' : 'info';
+    showToast(`Bug #${id}: ${res.message}`, type);
     await loadBugs();
   } catch (err) {
     showToast(`Failed to assign: ${err.message}`, 'error');

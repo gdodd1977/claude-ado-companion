@@ -127,7 +127,8 @@ public class DemoDataService : IAdoService
     public Task<TriagedBug?> GetBugAsync(int id) =>
         Task.FromResult(DemoBugs.FirstOrDefault(b => b.Id == id));
 
-    public Task AssignToCopilotAsync(int id) => Task.CompletedTask;
+    public Task<AssignCopilotResult> AssignToCopilotAsync(int id) =>
+        Task.FromResult(new AssignCopilotResult(true, false, "Demo mode — tagged copilot-ready"));
 
     public Task RetriageAsync(int id) => Task.CompletedTask;
 
