@@ -120,6 +120,22 @@ Run with `--demo` to see the dashboard with mock data — no ADO connection or `
 
 This loads 10 sample bugs covering all triage states (Copilot Ready, Copilot Possible, Human Required, and Untriaged) so you can explore the UI without any prerequisites.
 
+## Debug Mode
+
+Run with `--debug` to enable exception logging and a diagnostic endpoint:
+
+```powershell
+.\ClaudeAdoCompanion.exe --debug
+# or: dotnet run -- --debug
+```
+
+In debug mode:
+- All unhandled exceptions are logged with request details and stack traces to `%TEMP%\claude-ado-companion-debug.log`
+- A diagnostic endpoint is available at **http://localhost:5200/api/debug/log** to view the log from your browser
+- The log file path is printed to the console on startup
+
+This is useful for troubleshooting ADO connectivity issues, auth errors, or any unexpected behavior.
+
 ## Triage Skills
 
 The companion ships with Claude Code skills for triaging ADO bugs. These are auto-detected by Claude when you discuss bug triage, or can be invoked manually with `/triage-bug` and `/triage-bugs`. They use `az boards` CLI commands — no MCP server required. The skills read your ADO connection details from `appsettings.local.json` automatically.
