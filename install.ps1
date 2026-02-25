@@ -99,5 +99,58 @@ else {
     }
 }
 
+# -- Shortcut Creation --
+
+$exePath = Join-Path $PSScriptRoot "ClaudeAdoCompanion.exe"
+$exeExists = Test-Path $exePath
+
+if ($exeExists) {
+    Write-Host "----------------------------------------" -ForegroundColor Cyan
+    Write-Host "  Create Shortcuts" -ForegroundColor Cyan
+    Write-Host "----------------------------------------" -ForegroundColor Cyan
+    Write-Host ""
+    Write-Host "  [1] Desktop shortcut"
+    Write-Host "  [2] Start Menu shortcut"
+    Write-Host "  [3] Both"
+    Write-Host "  [4] Skip"
+    Write-Host ""
+    $choice = Read-Host "Choose an option (1-4)"
+
+    function New-AppShortcut {
+        param([string]$ShortcutPath)
+        $ws = New-Object -ComObject WScript.Shell
+        $sc = $ws.CreateShortcut($ShortcutPath)
+        $sc.TargetPath = $exePath
+        $sc.WorkingDirectory = $PSScriptRoot
+        $sc.Description = "Claude ADO Companion - Bug Triage Dashboard"
+        $sc.Save()
+        Write-Host "  Created: $ShortcutPath" -ForegroundColor Green
+    }
+
+    $desktopPath = [Environment]::GetFolderPath("Desktop")
+    $startMenuPath = Join-Path ([Environment]::GetFolderPath("Programs")) "Claude ADO Companion.lnk"
+
+    switch ($choice) {
+        "1" {
+            New-AppShortcut (Join-Path $desktopPath "Claude ADO Companion.lnk")
+        }
+        "2" {
+            New-AppShortcut $startMenuPath
+        }
+        "3" {
+            New-AppShortcut (Join-Path $desktopPath "Claude ADO Companion.lnk")
+            New-AppShortcut $startMenuPath
+        }
+        default {
+            Write-Host "  Skipped shortcut creation." -ForegroundColor DarkGray
+        }
+    }
+    Write-Host ""
+}
+else {
+    Write-Host "Tip: Download the release exe into this directory, then re-run this script to create shortcuts." -ForegroundColor DarkGray
+    Write-Host ""
+}
+
 Write-Host "Note for developers: building from source requires .NET 9 SDK (https://dot.net/download)." -ForegroundColor DarkGray
 Write-Host ""
