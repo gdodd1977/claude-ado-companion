@@ -6,6 +6,29 @@ A generic Azure DevOps bug triage companion powered by Claude Code. Connect it t
 - **Claude Code Triage Skills** — `/triage-bug` and `/triage-bugs` skills that assess actionability, ROI, and Copilot agent readiness
 - **Copilot Assignment** — One-click assign Copilot-ready bugs to GitHub Copilot coding agent with branch linking
 
+## Table of Contents
+
+- [Prerequisites](#prerequisites)
+- [Quick Start](#quick-start)
+  - [Option A: Download a release](#option-a-download-a-release-recommended)
+  - [Option B: Build from source](#option-b-build-from-source)
+  - [First-run setup](#first-run-setup)
+    - [Required settings](#required-settings)
+    - [Optional settings (for Copilot assignment)](#optional-settings-for-copilot-assignment)
+    - [Finding the Copilot User ID](#finding-the-copilot-user-id)
+    - [Finding the Repo GUIDs](#finding-the-repo-guids)
+- [Usage Guide](#usage-guide)
+  - [The bug table](#the-bug-table)
+  - [Filtering bugs](#filtering-bugs)
+  - [Running triage](#running-triage)
+  - [Understanding triage scores](#understanding-triage-scores)
+  - [Assigning to Copilot](#assigning-to-copilot)
+  - [Suggested workflow](#suggested-workflow)
+- [Demo Mode](#demo-mode)
+- [Debug Mode](#debug-mode)
+- [Triage Skills](#triage-skills)
+- [Development](#development)
+
 ## Prerequisites
 
 | Prerequisite | Required for | Install |
