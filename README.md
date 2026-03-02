@@ -33,6 +33,7 @@ A generic Azure DevOps bug triage companion powered by Claude Code. Connect it t
 
 | Prerequisite | Required for | Install |
 |---|---|---|
+| [GitHub CLI](https://cli.github.com/) | Downloading releases | `winget install --id GitHub.cli -e`, then `gh auth login` |
 | [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli-windows) | Dashboard + triage | `winget install --id Microsoft.AzureCLI -e` |
 | Azure login | Dashboard + triage | `az login` (needs access to your ADO organization) |
 | [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code/overview) | Triage skills | `npm install -g @anthropic-ai/claude-code` (requires Node.js 18+) |
