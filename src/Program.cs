@@ -232,8 +232,8 @@ app.MapGet("/api/claude/status", async () =>
     {
         var psi = new ProcessStartInfo
         {
-            FileName = "claude",
-            Arguments = "-p \"respond with just the word ok\" --max-turns 1",
+            FileName = "cmd.exe",
+            Arguments = "/c claude -p \"respond with just the word ok\" --max-turns 1",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,

@@ -287,8 +287,8 @@ public class AdoService : IAdoService
     {
         var psi = new ProcessStartInfo
         {
-            FileName = "claude",
-            Arguments = arguments,
+            FileName = "cmd.exe",
+            Arguments = $"/c claude {arguments}",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
