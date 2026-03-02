@@ -62,6 +62,7 @@ Before doing anything else, read the app configuration to get ADO connection det
    - `ADO_ORG` = `Dashboard.AdoOrg`
    - `ADO_PROJECT` = `Dashboard.AdoProject`
    - `AREA_PATH` = `Dashboard.AreaPath`
+   - `ITERATION_PATH` = `Dashboard.IterationPath` (may be null or empty — optional)
 
 If `ADO_ORG`, `ADO_PROJECT`, or `AREA_PATH` are empty, tell the user: "ADO connection is not configured. Please run the app and complete the setup form first."
 
@@ -85,6 +86,11 @@ WHERE [System.WorkItemType] = 'Bug'
   AND [System.AreaPath] UNDER '<AREA_PATH>'
   AND [System.State] <> 'Closed'
 ORDER BY [System.CreatedDate] DESC
+```
+
+**If `ITERATION_PATH` is set** (non-null, non-empty), add this clause before the ORDER BY:
+```sql
+  AND [System.IterationPath] UNDER '<ITERATION_PATH>'
 ```
 
 **If `--tag` is provided**, add this clause before the ORDER BY:
