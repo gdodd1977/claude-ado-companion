@@ -24,6 +24,7 @@ A generic Azure DevOps bug triage companion powered by Claude Code. Connect it t
   - [Understanding triage scores](#understanding-triage-scores)
   - [Assigning to Copilot](#assigning-to-copilot)
   - [Suggested workflow](#suggested-workflow)
+- [Updating](#updating)
 - [Demo Mode](#demo-mode)
 - [Debug Mode](#debug-mode)
 - [Triage Skills](#triage-skills)
@@ -206,6 +207,29 @@ The toast notification tells you exactly what happened. If the Copilot User ID i
 3. **Filter to Copilot Possible** — review these bugs, enrich their descriptions with missing details (specific files, expected behavior, acceptance criteria), then re-triage
 4. **Filter to Human Required** — these need human investigation. Use the ROI column to prioritize which ones to tackle first
 5. **Re-triage periodically** as bugs get updated with new information
+
+## Updating
+
+To update an existing install to the latest release:
+
+```powershell
+cd claude-ado-companion
+
+# Stop the running instance (Windows can't overwrite a locked exe)
+Get-Process ClaudeAdoCompanion -ErrorAction SilentlyContinue | Stop-Process -Force
+
+# Remove the old exe, then download the latest release
+Remove-Item .\ClaudeAdoCompanion.exe -Force
+gh release download --repo gdodd1977/claude-ado-companion --pattern "*" --dir . --clobber
+```
+
+Your settings (`appsettings.local.json`) are preserved across updates.
+
+To also pull the latest triage skills and source code:
+
+```powershell
+git pull
+```
 
 ## Demo Mode
 
