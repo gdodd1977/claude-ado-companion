@@ -2,14 +2,14 @@
 
 ## Overview
 
-A self-contained ASP.NET 8 web app that serves a bug triage dashboard and Claude Code session viewer for any Azure DevOps team. It connects to ADO to display bugs, and reads local Claude Code JSONL session files for the session viewer.
+A self-contained ASP.NET 8 web app that serves a bug triage dashboard for any Azure DevOps team. It connects to ADO to display bugs, runs Claude Code skills for AI-powered triage, and streams triage session output in real time via a floating panel.
 
-Runs at `http://localhost:5200`. Ships as a single-file self-contained exe (`win-x64`). Has a `--demo` mode with mock data for UI preview without ADO access. On first run, presents a setup form for ADO connection details; settings are persisted to `appsettings.local.json`.
+Runs at `http://localhost:5200`. Ships as a single-file self-contained exe (`win-x64`). Has a `--demo` mode with mock data for UI preview without ADO access, and a `--debug` mode that logs exceptions to a temp file. On first run, presents a setup form for ADO connection details; settings are persisted to `appsettings.local.json` and reload without restart via `IOptionsMonitor<T>`.
 
 ## Architecture
 
 ```
-install.ps1                        # Prerequisite checker (az CLI, az login, Claude CLI)
+install.ps1                        # Prerequisite checker + shortcut creator
 .claude/
   skills/
     triage-bug/SKILL.md            # Single-bug triage skill (auto-detected by Claude)
@@ -24,16 +24,16 @@ src/
     SessionMessage.cs            # Single message in a Claude Code session
     SessionSummary.cs            # Lightweight session list entry (id, timestamp, preview)
   Services/
-    IAdoService.cs               # Interface for bug operations (live + demo implementations)
+    IAdoService.cs               # Interface for bug operations + AssignCopilotResult record
     AdoService.cs                # Live implementation — calls ADO REST APIs via az CLI token
     DemoDataService.cs           # --demo implementation — returns hardcoded mock bugs
     TriageTagParser.cs           # Static parser: System.Tags string → TriageStatus
     AzCliTokenService.cs         # Gets/caches ADO bearer tokens via `az account get-access-token`
-    ISessionService.cs           # Interface for Claude Code session browsing
-    SessionService.cs            # Reads JSONL files from ~/.claude/projects/<project>/
+    ISessionService.cs           # Interface for triage panel session streaming
+    SessionService.cs            # Reads JSONL files from auto-detected Claude projects path
   wwwroot/
-    index.html                   # Single-page HTML shell
-    js/app.js                    # All client-side logic (fetch, render, filter, sort, SSE)
+    index.html                   # Single-page HTML shell (no tabs — bug table only)
+    js/app.js                    # All client-side logic (fetch, render, filter, sort, triage panel)
     css/styles.css               # Full stylesheet
 ```
 
@@ -41,9 +41,11 @@ src/
 
 ### Configuration & First-Run Setup
 
-On first launch, `DashboardSettings.IsConfigured` returns `false` (all defaults are empty strings). The frontend detects this via `GET /api/config` and shows a setup form instead of the bug table. On submit, `POST /api/config` writes the user's settings to `appsettings.local.json`, which is loaded as an additional config source and gitignored.
+On first launch, `DashboardSettings.IsConfigured` returns `false` (all defaults are empty strings). The frontend detects this via `GET /api/config` and shows a setup form instead of the bug table. On submit, `POST /api/config` writes the user's settings to `appsettings.local.json`, which is loaded as an additional config source with `reloadOnChange: true`.
 
-A settings gear icon in the header lets users reopen the form at any time with current values pre-filled.
+All services use `IOptionsMonitor<DashboardSettings>` so config changes take effect without restarting the app. The frontend reloads the page 1.5 seconds after save to allow the file watcher to pick up changes.
+
+A settings gear icon in the header lets users reopen the form at any time with current values pre-filled. When bug loading fails (e.g., 401 from bad config), an inline "Open Settings" button appears in the error state.
 
 ### Triage Model (tag-based)
 
@@ -68,7 +70,17 @@ public class TriageStatus
 1. User triggers "Run Claude Analysis" or "Re-triage" from the dashboard
 2. Claude CLI analyzes the bug and applies triage tags to the ADO work item
 3. Dashboard fetches bugs via WIQL + batch work item API, parses tags inline in `MapWorkItem()`
-4. User can "Assign to Copilot" — patches `System.AssignedTo` to the configured Copilot user ID, adds `copilot-ready` tag, links the configured branch
+4. User can "Assign to Copilot" — conditionally patches `System.AssignedTo`, adds `copilot-ready` tag, and links branch (only for configured values)
+
+### Assign to Copilot
+
+`AssignToCopilotAsync` builds a JSON Patch (`application/json-patch+json`) with only the operations that have configured values:
+
+1. **Always**: adds `copilot-ready` to `System.Tags` (merged with existing tags)
+2. **If `CopilotUserId` is set**: patches `System.AssignedTo` to the Copilot service account
+3. **If `RepoProjectGuid` and `RepoGuid` are set**: adds an `ArtifactLink` relation for the branch
+
+Returns an `AssignCopilotResult(bool Assigned, bool BranchLinked, string Message)` so the frontend can display exactly what happened.
 
 ### In-App Triage (fire-and-forget with live streaming)
 
@@ -104,12 +116,27 @@ Logging: the area path is logged at `Information` on every query. If WIQL return
 
 **Triage skills** (`.claude/skills/triage-bug/SKILL.md`, `.claude/skills/triage-bugs/SKILL.md`) use `az boards` CLI commands exclusively — no MCP server dependency. Skills are auto-detected by Claude based on their descriptions (e.g., when the user asks to assess or triage a bug) and can also be invoked manually via `/triage-bug` or `/triage-bugs`. The skills read ADO connection details from `appsettings.local.json` (falling back to `appsettings.json`) and use those values for all `az boards` commands.
 
-### Session Viewer
+### Session Path Auto-Detection
 
-`SessionService` reads Claude Code JSONL files from the configured `ClaudeProjectsPath`. Supports:
-- **List sessions** — scans `.jsonl` files by last-modified, optionally filtering to triage sessions
-- **Load session** — parses all messages (user, assistant text, thinking, tool_call, tool_result) including subagent files
-- **Live streaming** — SSE endpoint that polls the JSONL file every 500ms for new content
+`SessionService` reads Claude Code JSONL files for the triage panel. The session path is resolved in order:
+
+1. **Explicit config** — if `ClaudeProjectsPath` is set and exists, use it
+2. **Repo root match** — walk up from the exe to find `.git`, encode the path Claude Code style (`C:\Repos\foo` → `C--Repos-foo`), check under `~/.claude/projects/`
+3. **Most recent fallback** — scan all directories under `~/.claude/projects/`, pick the one with the most recently modified `.jsonl` file
+
+This means the app works whether run from inside the repo or from a standalone download location.
+
+### Debug Mode
+
+When launched with `--debug`:
+- Logging minimum level set to `Debug`
+- Global exception-handling middleware logs every unhandled exception (method, path, exception type, message, stack trace, inner exception) to `%TEMP%\claude-ado-companion-debug.log`
+- `GET /api/debug/log` endpoint serves the log file as plain text (only registered in debug mode)
+- Log file path printed to console on startup
+
+### Port Conflict Handling
+
+`app.Run()` is wrapped in a try/catch for `IOException` with `SocketException` inner. On port-in-use, displays a friendly error message with remediation steps and waits for a keypress before exiting.
 
 ## HTTP Endpoints (Program.cs)
 
@@ -122,22 +149,25 @@ Logging: the area path is logged at `Information` on every query. If WIQL return
 | POST | `/api/claude/launch-auth` | Open a terminal window for interactive Claude login |
 | GET | `/api/bugs` | All open bugs with triage status |
 | GET | `/api/bugs/{id}` | Single bug by ID |
-| POST | `/api/bugs/{id}/assign-copilot` | Assign bug to Copilot user + link branch + add tag |
+| POST | `/api/bugs/{id}/assign-copilot` | Tag + conditionally assign to Copilot + link branch; returns `AssignCopilotResult` |
 | POST | `/api/bugs/{id}/retriage` | Fire-and-forget: start `claude -p "/triage-bug {id} --force"` |
 | POST | `/api/triage/batch` | Fire-and-forget: start `claude -p "/triage-bugs --max={N}"` |
-| GET | `/api/sessions` | List recent sessions (optional `?max=` and `?triageOnly=`) |
 | GET | `/api/sessions/active` | Most recently modified session (within 5 min) |
-| GET | `/api/sessions/{id}` | All messages in a session |
 | GET | `/api/sessions/{id}/stream` | SSE stream of session messages |
+| GET | `/api/debug/log` | Debug log contents (only in `--debug` mode) |
 
 ## Frontend (app.js)
 
 ### First-Run Flow
-On load, fetches `GET /api/config`. If `isConfigured` is `false` and not in demo mode, shows the setup banner (modal form) instead of the bug table. On submit, POSTs settings and reloads the page.
+On load, fetches `GET /api/config`. If `isConfigured` is `false` and not in demo mode, shows the setup banner (modal form) instead of the bug table. On submit, POSTs settings and reloads the page after 1.5 seconds.
+
+### Error State
+When bug loading fails, the table shows the error message with a contextual hint (e.g., "This usually means your ADO connection details are wrong or your `az login` has expired") and an inline "Open Settings" button.
 
 ### Table Columns
 ID | Title | Sev | ROI | Copilot | Actions
 
+- **Sev, ROI, Copilot, Actions** columns are center-aligned
 - **ROI** — "High" (green badge) if `triageStatus.highRoi`, otherwise "—"
 - **Copilot** — "Ready" (green) / "Possible" (amber) / "Human Required" (red) / "—"
 - **Needs Info** — small amber badge rendered inline after the title text
@@ -156,7 +186,7 @@ Plus an "Assigned to Me" toggle that layers on top.
 ### Triage Panel
 A floating panel docked to the bottom-right of the screen (`position: fixed; bottom: 0; right: 24px`). Non-blocking — the bug grid remains fully interactive while it's open. Shows:
 - Header with title ("Claude Analysis"), live status text, minimize (–) button, and close (×) button
-- Scrollable message body (`overscroll-behavior: contain`) that renders streamed session messages using the same `renderMessage()` function as the sessions tab
+- Scrollable message body (`overscroll-behavior: contain`) that renders streamed session messages
 - Polls for active session, connects via SSE, auto-scrolls to latest message
 - When SSE stream closes (triage complete), shows a success toast and auto-refreshes the bug list
 - Minimize collapses the panel to just its header bar; click minimize again to restore
@@ -164,7 +194,7 @@ A floating panel docked to the bottom-right of the screen (`position: fixed; bot
 
 ## Configuration (DashboardSettings)
 
-All settings default to empty strings. On first run, the setup UI collects values and writes them to `appsettings.local.json` (gitignored). The app loads config from `appsettings.json` (defaults) → `appsettings.local.json` (user overrides).
+All settings default to empty strings. On first run, the setup UI collects values and writes them to `appsettings.local.json` (gitignored). The app loads config from `appsettings.json` (defaults) → `appsettings.local.json` (user overrides) with `reloadOnChange: true`.
 
 | Key | Default | Description |
 |-----|---------|-------------|
@@ -172,15 +202,24 @@ All settings default to empty strings. On first run, the setup UI collects value
 | `AdoProject` | `""` | ADO project name |
 | `AreaPath` | `""` | Bug area path filter |
 | `IterationPath` | `null` | Optional sprint/iteration path filter |
-| `CopilotUserId` | `""` | AAD object ID for the Copilot service account |
+| `CopilotUserId` | `""` | Full unique name for the Copilot service account (`guid@tenant`) |
 | `RepoProjectGuid` | `""` | ADO project GUID for branch linking |
 | `RepoGuid` | `""` | ADO repo GUID for branch linking |
-| `BranchRef` | `GBmain` | Branch ref for Copilot assignment linking |
+| `BranchRef` | `GBmain` | Branch ref for Copilot assignment linking (`GB` prefix + branch name) |
 | `TriagePipelineName` | `""` | Pipeline name (reserved for future use) |
 | `MaxBugsDefault` | `100` | Max bugs returned by WIQL |
 | `ClaudeProjectsPath` | `""` | Path to Claude Code session JSONL files (auto-detected if empty) |
 
 `IsConfigured` returns `true` when `AdoOrg`, `AdoProject`, and `AreaPath` are all non-empty.
+
+## Install Script (install.ps1)
+
+Checks prerequisites (Azure CLI, Azure login, Claude CLI) and reports status. If the exe is present in the same directory, offers to create shortcuts:
+
+- **Desktop shortcut** — `.lnk` file on the user's desktop
+- **Start Menu shortcut** — `.lnk` file in the user's Programs folder
+
+Shortcuts launch via `cmd /k` so the console window stays open for output and error visibility. Working directory is set to the script's directory for session auto-detection.
 
 ## NuGet Dependencies
 
@@ -194,6 +233,7 @@ cd src
 dotnet build              # Build
 dotnet run                # Run (requires az login + claude auth)
 dotnet run -- --demo      # Run with mock data
+dotnet run -- --debug     # Run with exception logging
 ```
 
 ## Publish
