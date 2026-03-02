@@ -65,7 +65,7 @@
           <button class="btn" onclick="loadBugs()">
             <span>&#8635;</span> Refresh
           </button>
-          <button class="btn btn-primary" onclick="batchTriage()">
+          <button class="btn btn-primary" id="triageBtn" onclick="batchTriage()" disabled>
             <span>&#9654;</span> Run Claude Analysis
           </button>
           <span class="count-badge" id="bugCount"></span>
@@ -88,6 +88,7 @@
           <table>
             <thead>
               <tr>
+                <th class="col-select"><input type="checkbox" id="selectAll" onchange="toggleSelectAll()" title="Select all"></th>
                 <th data-sort="id" onclick="sortBy('id')">ID <span class="sort-indicator">&#9650;</span></th>
                 <th data-sort="title" onclick="sortBy('title')">Title <span class="sort-indicator">&#9650;</span></th>
                 <th data-sort="severity" onclick="sortBy('severity')">Sev <span class="sort-indicator">&#9650;</span></th>
@@ -97,7 +98,7 @@
               </tr>
             </thead>
             <tbody id="bugsTable">
-              <tr><td colspan="6" class="loading"><div class="spinner"></div> Loading bugs...</td></tr>
+              <tr><td colspan="7" class="loading"><div class="spinner"></div> Loading bugs...</td></tr>
             </tbody>
           </table>
         </div>

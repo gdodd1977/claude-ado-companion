@@ -211,6 +211,18 @@ app.MapPost("/api/triage/batch", async (HttpContext ctx, IAdoService adoService)
     return Results.Ok(new { success = true, message = "Batch triage started", demo = isDemo });
 });
 
+app.MapPost("/api/triage/selected", async (HttpContext ctx, IAdoService adoService) =>
+{
+    var body = await ctx.Request.ReadFromJsonAsync<SelectedTriageRequest>();
+    if (body?.BugIds == null || body.BugIds.Count == 0)
+    {
+        return Results.BadRequest(new { error = "bugIds is required and must not be empty" });
+    }
+
+    await adoService.TriageSelectedAsync(body.BugIds);
+    return Results.Ok(new { success = true, message = $"Triage started for {body.BugIds.Count} bugs", demo = isDemo });
+});
+
 // === Claude Auth Endpoints ===
 
 var claudeAuthVerified = false;
@@ -394,3 +406,4 @@ catch (IOException ex) when (ex.InnerException is System.Net.Sockets.SocketExcep
 }
 
 record BatchTriageRequest(int? Max);
+record SelectedTriageRequest(List<int>? BugIds);

@@ -133,4 +133,6 @@ public class DemoDataService : IAdoService
     public Task RetriageAsync(int id) => Task.CompletedTask;
 
     public Task BatchTriageAsync(int max) => Task.CompletedTask;
+
+    public Task TriageSelectedAsync(List<int> bugIds) => Task.CompletedTask;
 }

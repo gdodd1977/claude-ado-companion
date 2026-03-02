@@ -15,4 +15,6 @@ public interface IAdoService
     Task RetriageAsync(int id);
 
     Task BatchTriageAsync(int max);
+
+    Task TriageSelectedAsync(List<int> bugIds);
 }

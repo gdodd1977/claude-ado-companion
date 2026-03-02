@@ -67,8 +67,8 @@ public class TriageStatus
 
 ### Bug Lifecycle
 
-1. User triggers "Run Claude Analysis" or "Re-triage" from the dashboard
-2. Claude CLI analyzes the bug and applies triage tags to the ADO work item
+1. User selects bugs via checkboxes and clicks "Run Claude Analysis (N)", or clicks per-bug "Re-triage"
+2. Claude CLI analyzes the bug(s) and applies triage tags to the ADO work items
 3. Dashboard fetches bugs via WIQL + batch work item API, parses tags inline in `MapWorkItem()`
 4. User can "Assign to Copilot" — conditionally patches `System.AssignedTo`, adds `copilot-ready` tag, and links branch (only for configured values)
 
@@ -87,7 +87,7 @@ Returns an `AssignCopilotResult(bool Assigned, bool BranchLinked, string Message
 Triage is triggered directly from the dashboard UI. The backend starts the Claude CLI process in the background and returns immediately. The frontend opens a **floating session panel** (bottom-right, non-blocking) that shows the Claude session logs in real time.
 
 **Flow:**
-1. User clicks "Run Claude Analysis" or per-bug "Re-triage" button
+1. User selects bugs via checkboxes and clicks "Run Claude Analysis (N)", or clicks per-bug "Re-triage" button
 2. Frontend checks Claude CLI authentication via `GET /api/claude/status`
 3. If not authenticated, `POST /api/claude/launch-auth` opens a terminal window for interactive Claude login; frontend polls until auth succeeds
 4. Once auth'd (cached for the session), the triage endpoint fires the Claude CLI process (fire-and-forget)
@@ -151,7 +151,8 @@ When launched with `--debug`:
 | GET | `/api/bugs/{id}` | Single bug by ID |
 | POST | `/api/bugs/{id}/assign-copilot` | Tag + conditionally assign to Copilot + link branch; returns `AssignCopilotResult` |
 | POST | `/api/bugs/{id}/retriage` | Fire-and-forget: start `claude -p "/triage-bug {id} --force"` |
-| POST | `/api/triage/batch` | Fire-and-forget: start `claude -p "/triage-bugs --max={N}"` |
+| POST | `/api/triage/batch` | Fire-and-forget: start `claude -p "/triage-bugs --max={N}"` (kept for backward compat with skills) |
+| POST | `/api/triage/selected` | Fire-and-forget: triage specific bug IDs. Body: `{ bugIds: [int] }` |
 | GET | `/api/sessions/active` | Most recently modified session (within 5 min) |
 | GET | `/api/sessions/{id}/stream` | SSE stream of session messages |
 | GET | `/api/debug/log` | Debug log contents (only in `--debug` mode) |
@@ -165,8 +166,9 @@ On load, fetches `GET /api/config`. If `isConfigured` is `false` and not in demo
 When bug loading fails, the table shows the error message with a contextual hint (e.g., "This usually means your ADO connection details are wrong or your `az login` has expired") and an inline "Open Settings" button.
 
 ### Table Columns
-ID | Title | Sev | ROI | Copilot | Actions
+☐ | ID | Title | Sev | ROI | Copilot | Actions
 
+- **☐** — Checkbox column (40px, center-aligned). Header has a master "select all" checkbox; each row has an individual checkbox. Selection state is maintained in a `Set` and survives filter/sort changes. The master checkbox shows indeterminate state when some (but not all) visible bugs are selected.
 - **Sev, ROI, Copilot, Actions** columns are center-aligned
 - **ROI** — "High" (green badge) if `triageStatus.highRoi`, otherwise "—"
 - **Copilot** — "Ready" (green) / "Possible" (amber) / "Human Required" (red) / "—"
