@@ -4,7 +4,7 @@ A generic Azure DevOps bug triage companion powered by Claude Code. Connect it t
 
 - **Bug Triage Dashboard** — View, sort, filter, and triage ADO bugs with AI-generated scores
 - **Claude Code Triage Skills** — `/triage-bug` and `/triage-bugs` skills that assess actionability, ROI, and Copilot agent readiness
-- **Session Viewer** — Browse and live-stream Claude Code sessions in real time
+- **Copilot Assignment** — One-click assign Copilot-ready bugs to GitHub Copilot coding agent with branch linking
 
 ## Prerequisites
 
@@ -108,6 +108,80 @@ Settings are saved to `appsettings.local.json` (gitignored).
 ### Open the dashboard
 
 Navigate to **http://localhost:5200** in your browser.
+
+## Usage Guide
+
+### The bug table
+
+The dashboard loads all non-closed bugs from your configured area path. Each row shows:
+
+| Column | What it means |
+|--------|---------------|
+| **ID** | Links directly to the bug in ADO |
+| **Title** | Bug title. An amber **Needs Info** badge appears if the bug lacks enough detail to act on |
+| **Sev** | Severity (1 = critical, 4 = low) |
+| **ROI** | **High** (green) if the bug scores 70+ on the ROI assessment, otherwise **—** |
+| **Copilot** | **Ready** (green) = assignable to Copilot now. **Possible** (amber) = could work with more detail. **Human Required** (red) = needs human judgment. **—** = not yet triaged |
+| **Actions** | Assign to Copilot button (for Ready/Possible bugs) and Re-triage button |
+
+Click any column header to sort. Click again to reverse direction.
+
+### Filtering bugs
+
+Use the filter chips above the table to focus on what matters:
+
+- **All** — every bug in the area path
+- **Triaged** / **Untriaged** — whether Claude has assessed the bug yet
+- **Copilot Ready** / **Copilot Possible** / **Human Required** — filter by Copilot readiness
+- **Assigned to Me** — toggle to show only bugs assigned to your ADO identity
+
+### Running triage
+
+There are two ways to triage bugs:
+
+1. **Batch triage** — click **Run Claude Analysis** in the toolbar. You'll be prompted for how many bugs to process. Claude will assess each bug sequentially and apply tags.
+2. **Single bug re-triage** — click the re-triage button (&#8635;) on any bug row. Useful for re-assessing a bug after its description has been updated.
+
+Both launch a Claude Code process in the background. The **Claude Analysis panel** appears in the bottom-right corner streaming the session output in real time. You can minimize or close it — the bug table stays fully interactive while triage runs. When triage completes, the bug list auto-refreshes.
+
+### Understanding triage scores
+
+Each triage produces three scores applied as ADO tags:
+
+**Actionability (0-100)** — Is there enough information to act on this bug?
+- 80-100: Fully actionable — clear repro steps, expected/actual behavior, error details
+- 50-79: Partially actionable — some info present but gaps remain
+- 0-49: Needs more info — tagged `needs-info`
+
+**ROI (0-100)** — How valuable is fixing this bug?
+- 70-100: High ROI — tagged `high-roi` (high severity, customer-reported, regression, etc.)
+- 40-69: Medium ROI
+- 0-39: Low ROI — backlog candidate
+
+**Copilot Readiness (0-100)** — Can GitHub Copilot coding agent fix this autonomously?
+- 75-100: **Copilot Ready** — clear problem, code-scoped, small isolated fix. Tagged `copilot-ready`
+- 50-74: **Copilot Possible** — could work if the issue description is enriched. Tagged `copilot-possible`
+- 0-49: **Human Required** — needs investigation, design decisions, or cross-team coordination. Tagged `human-required`
+
+Hard blockers (UI/UX decisions, infra changes, ambiguous root cause, AI quality issues) override to Human Required regardless of score.
+
+### Assigning to Copilot
+
+Click the robot button (&#129302;) on a Copilot Ready or Copilot Possible bug. Depending on your settings, this will:
+
+1. **Always**: Add the `copilot-ready` tag to the work item
+2. **If Copilot User ID is configured**: Assign the bug to the GitHub Copilot service account
+3. **If Repo GUIDs are configured**: Link the configured branch to the work item
+
+The toast notification tells you exactly what happened. If the Copilot User ID isn't configured, it will tag the bug but skip the assignment — see [Optional settings](#optional-settings-for-copilot-assignment) to set this up.
+
+### Suggested workflow
+
+1. **Run batch triage** on your area path to score all open bugs
+2. **Filter to Copilot Ready** — these are your quick wins. Assign them to Copilot.
+3. **Filter to Copilot Possible** — review these bugs, enrich their descriptions with missing details (specific files, expected behavior, acceptance criteria), then re-triage
+4. **Filter to Human Required** — these need human investigation. Use the ROI column to prioritize which ones to tackle first
+5. **Re-triage periodically** as bugs get updated with new information
 
 ## Demo Mode
 
