@@ -4,6 +4,7 @@ let currentFilter = 'all';
 let currentSort = { key: 'roi', dir: 'desc' };
 let currentUserName = '';
 let showOnlyMine = false;
+let selectedBugIds = new Set();
 
 // Triage modal state
 let triageEventSource = null;
@@ -54,7 +55,7 @@ async function apiFetch(url, options = {}) {
 // ===== Bugs Tab =====
 async function loadBugs() {
   const tbody = document.getElementById('bugsTable');
-  tbody.innerHTML = '<tr><td colspan="6" class="loading"><div class="spinner"></div> Loading bugs...</td></tr>';
+  tbody.innerHTML = '<tr><td colspan="7" class="loading"><div class="spinner"></div> Loading bugs...</td></tr>';
 
   try {
     bugs = await apiFetch('/api/bugs');
@@ -65,7 +66,7 @@ async function loadBugs() {
     const hint = is401
       ? `<br><br>This usually means your ADO connection details are wrong or your <code>az login</code> has expired.`
       : '';
-    tbody.innerHTML = `<tr><td colspan="6" class="loading" style="color:var(--score-low)">
+    tbody.innerHTML = `<tr><td colspan="7" class="loading" style="color:var(--score-low)">
       ${escapeHtml(err.message)}${hint}
       <br><br><button class="btn btn-primary" onclick="openSettings()">Open Settings</button>
     </td></tr>`;
@@ -82,7 +83,9 @@ function renderBugs() {
     filtered.length === bugs.length ? `${bugs.length} bugs` : `${filtered.length} of ${bugs.length} bugs`;
 
   if (sorted.length === 0) {
-    tbody.innerHTML = '<tr><td colspan="6" class="loading">No bugs match the current filter</td></tr>';
+    tbody.innerHTML = '<tr><td colspan="7" class="loading">No bugs match the current filter</td></tr>';
+    updateTriageButton();
+    updateMasterCheckbox();
     return;
   }
 
@@ -92,8 +95,10 @@ function renderBugs() {
     const readiness = ts?.copilotReadiness || '';
     const showAssign = readiness === 'Ready' || readiness === 'Possible';
     const needsInfo = ts?.needsInfo ? '<span class="needs-info-badge">Needs Info</span>' : '';
+    const checked = selectedBugIds.has(bug.id) ? 'checked' : '';
 
     return `<tr>
+      <td><input type="checkbox" ${checked} onchange="toggleBugSelection(${bug.id})"></td>
       <td><a class="bug-id-link" href="${escapeHtml(bug.adoUrl)}" target="_blank">${bug.id}</a></td>
       <td><span class="bug-title" title="${escapeHtml(bug.title)}">${escapeHtml(bug.title)}</span>${needsInfo}</td>
       <td><span class="severity-badge severity-${sevNum}">${sevNum}</span></td>
@@ -117,6 +122,9 @@ function renderBugs() {
         : '\u25B2';
     }
   });
+
+  updateMasterCheckbox();
+  updateTriageButton();
 }
 
 function roiBadge(highRoi) {
@@ -214,6 +222,67 @@ function filterBugs(list) {
   });
 }
 
+// ===== Selection =====
+function toggleBugSelection(id) {
+  if (selectedBugIds.has(id)) {
+    selectedBugIds.delete(id);
+  } else {
+    selectedBugIds.add(id);
+  }
+  updateMasterCheckbox();
+  updateTriageButton();
+}
+
+function toggleSelectAll() {
+  const master = document.getElementById('selectAll');
+  const visibleIds = filterBugs(bugs).map(b => b.id);
+
+  if (master.checked) {
+    visibleIds.forEach(id => selectedBugIds.add(id));
+  } else {
+    visibleIds.forEach(id => selectedBugIds.delete(id));
+  }
+
+  renderBugs();
+}
+
+function updateMasterCheckbox() {
+  const master = document.getElementById('selectAll');
+  const visibleIds = filterBugs(bugs).map(b => b.id);
+
+  if (visibleIds.length === 0) {
+    master.checked = false;
+    master.indeterminate = false;
+    return;
+  }
+
+  const selectedCount = visibleIds.filter(id => selectedBugIds.has(id)).length;
+
+  if (selectedCount === 0) {
+    master.checked = false;
+    master.indeterminate = false;
+  } else if (selectedCount === visibleIds.length) {
+    master.checked = true;
+    master.indeterminate = false;
+  } else {
+    master.checked = false;
+    master.indeterminate = true;
+  }
+}
+
+function updateTriageButton() {
+  const btn = document.getElementById('triageBtn');
+  const count = selectedBugIds.size;
+
+  if (count > 0) {
+    btn.disabled = false;
+    btn.innerHTML = `<span>&#9654;</span> Run Claude Analysis (${count})`;
+  } else {
+    btn.disabled = true;
+    btn.innerHTML = `<span>&#9654;</span> Run Claude Analysis`;
+  }
+}
+
 // ===== Actions =====
 async function assignCopilot(id) {
   if (!confirm(`Assign bug #${id} to GitHub Copilot coding agent?`)) return;
@@ -244,16 +313,20 @@ async function retriage(id) {
 }
 
 async function batchTriage() {
-  const max = prompt('How many bugs to analyze with Claude?', '10');
-  if (!max) return;
+  if (selectedBugIds.size === 0) return;
 
   const authed = await ensureClaudeAuth();
   if (!authed) return;
 
+  const bugIds = [...selectedBugIds];
+  selectedBugIds.clear();
+  updateTriageButton();
+  updateMasterCheckbox();
+
   try {
-    const res = await apiFetch('/api/triage/batch', {
+    const res = await apiFetch('/api/triage/selected', {
       method: 'POST',
-      body: JSON.stringify({ max: parseInt(max) }),
+      body: JSON.stringify({ bugIds }),
     });
     openTriageModal(res.demo);
   } catch (err) {

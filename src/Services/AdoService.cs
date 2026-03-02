@@ -174,6 +174,13 @@ public class AdoService : IAdoService
         return Task.CompletedTask;
     }
 
+    public Task TriageSelectedAsync(List<int> bugIds)
+    {
+        var idList = string.Join(" ", bugIds);
+        RunClaudeCodeFireAndForget($"-p \"For each of these bug IDs, run /triage-bug <id> --force: {idList}\"");
+        return Task.CompletedTask;
+    }
+
     private async Task<List<TriagedBug>> BatchFetchWorkItemsAsync(List<int> ids)
     {
         var allBugs = new List<TriagedBug>();

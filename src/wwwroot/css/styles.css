@@ -217,12 +217,26 @@ table {
 }
 
 /* Column widths */
-th:nth-child(1), td:nth-child(1) { width: 80px; }   /* ID */
-th:nth-child(2), td:nth-child(2) { width: auto; }    /* Title — fills remaining */
-th:nth-child(3), td:nth-child(3) { width: 60px; text-align: center; }    /* Sev */
-th:nth-child(4), td:nth-child(4) { width: 70px; text-align: center; }   /* ROI */
-th:nth-child(5), td:nth-child(5) { width: 140px; text-align: center; }  /* Copilot */
-th:nth-child(6), td:nth-child(6) { width: 100px; text-align: center; }  /* Actions */
+th:nth-child(1), td:nth-child(1) { width: 40px; text-align: center; }   /* Select */
+th:nth-child(2), td:nth-child(2) { width: 80px; }   /* ID */
+th:nth-child(3), td:nth-child(3) { width: auto; }    /* Title — fills remaining */
+th:nth-child(4), td:nth-child(4) { width: 60px; text-align: center; }    /* Sev */
+th:nth-child(5), td:nth-child(5) { width: 70px; text-align: center; }   /* ROI */
+th:nth-child(6), td:nth-child(6) { width: 140px; text-align: center; }  /* Copilot */
+th:nth-child(7), td:nth-child(7) { width: 100px; text-align: center; }  /* Actions */
+
+/* Checkbox column */
+.col-select {
+  cursor: default;
+}
+
+.col-select input[type="checkbox"],
+td input[type="checkbox"] {
+  accent-color: var(--accent);
+  cursor: pointer;
+  width: 16px;
+  height: 16px;
+}
 
 thead th {
   position: sticky;
