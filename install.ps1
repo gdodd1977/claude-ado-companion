@@ -63,22 +63,25 @@ function Install-ReleaseAssets {
 function Test-Prerequisites {
     Write-Banner "Checking Prerequisites"
 
-    $issues = @()
-
     # -- 1. Azure CLI --
     Write-Host "  [1/3] Azure CLI ... " -NoNewline
     $azVersion = az --version 2>&1 | Select-Object -First 1
-    if ($LASTEXITCODE -eq 0 -and $azVersion -match 'azure-cli') {
+    # az --version returns non-zero exit code when updates are available, so check output only
+    if ($azVersion -match 'azure-cli') {
         Write-Host "OK  ($azVersion)" -ForegroundColor Green
     }
     else {
         Write-Host "NOT FOUND" -ForegroundColor Red
-        $issues += @{
-            Name = "Azure CLI"
-            Fix  = @(
-                "winget install --id Microsoft.AzureCLI -e"
-                "  -- or download from https://aka.ms/installazurecliwindows"
-            )
+        $answer = Read-Host "        Install now via winget? (Y/n)"
+        if ($answer -ne 'n') {
+            Write-Host "        Installing Azure CLI ..." -ForegroundColor Cyan
+            winget install --id Microsoft.AzureCLI -e --accept-source-agreements --accept-package-agreements
+            if ($LASTEXITCODE -eq 0) {
+                Write-Host "        OK - you may need to restart your terminal for 'az' to be on PATH." -ForegroundColor Green
+            }
+            else {
+                Write-Host "        Install failed. Try manually: winget install --id Microsoft.AzureCLI -e" -ForegroundColor Red
+            }
         }
     }
 
@@ -91,9 +94,9 @@ function Test-Prerequisites {
     }
     else {
         Write-Host "NOT LOGGED IN" -ForegroundColor Yellow
-        $issues += @{
-            Name = "Azure login"
-            Fix  = @("az login")
+        $answer = Read-Host "        Run 'az login' now? (Y/n)"
+        if ($answer -ne 'n') {
+            az login
         }
     }
 
@@ -105,30 +108,38 @@ function Test-Prerequisites {
     }
     else {
         Write-Host "NOT FOUND" -ForegroundColor Red
-        $issues += @{
-            Name = "Claude CLI"
-            Fix  = @(
-                "npm install -g @anthropic-ai/claude-code"
-                "  -- requires Node.js 18+. Install Node: https://nodejs.org"
-            )
+        # Check if npm is available first
+        $npmVersion = npm --version 2>&1
+        if ($LASTEXITCODE -eq 0 -and $npmVersion) {
+            $answer = Read-Host "        Install now via npm? (Y/n)"
+            if ($answer -ne 'n') {
+                Write-Host "        Installing Claude Code CLI ..." -ForegroundColor Cyan
+                npm install -g @anthropic-ai/claude-code
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Host "        OK" -ForegroundColor Green
+                }
+                else {
+                    Write-Host "        Install failed. Try manually: npm install -g @anthropic-ai/claude-code" -ForegroundColor Red
+                }
+            }
+        }
+        else {
+            Write-Host "        npm not found. Install Node.js 18+ first: https://nodejs.org" -ForegroundColor Yellow
+            $answer = Read-Host "        Install Node.js via winget? (Y/n)"
+            if ($answer -ne 'n') {
+                Write-Host "        Installing Node.js ..." -ForegroundColor Cyan
+                winget install --id OpenJS.NodeJS.LTS -e --accept-source-agreements --accept-package-agreements
+                if ($LASTEXITCODE -eq 0) {
+                    Write-Host "        OK - restart your terminal, then run: npm install -g @anthropic-ai/claude-code" -ForegroundColor Green
+                }
+                else {
+                    Write-Host "        Install failed. Download from https://nodejs.org" -ForegroundColor Red
+                }
+            }
         }
     }
 
     Write-Host ""
-    if ($issues.Count -eq 0) {
-        Write-Host "  All prerequisites met!" -ForegroundColor Green
-    }
-    else {
-        Write-Host "  $($issues.Count) item(s) need attention:" -ForegroundColor Yellow
-        Write-Host ""
-        foreach ($issue in $issues) {
-            Write-Host "    $($issue.Name)" -ForegroundColor Yellow
-            foreach ($step in $issue.Fix) {
-                Write-Host "      $step"
-            }
-            Write-Host ""
-        }
-    }
 }
 
 function New-AppShortcut {
@@ -216,7 +227,7 @@ function Invoke-UpdateFlow {
 # ── Main ───────────────────────────────────────────────────────────────────
 
 # Determine context: are we inside an existing clone?
-# When run via irm | iex, $PSScriptRoot is empty — fall back to $PWD.
+# When run via irm | iex, $PSScriptRoot is empty - fall back to $PWD.
 $scriptDir = if ($PSScriptRoot) { $PSScriptRoot } else { (Get-Location).Path }
 Push-Location $scriptDir
 
