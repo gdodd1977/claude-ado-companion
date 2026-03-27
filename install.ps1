@@ -21,6 +21,10 @@ $repoOwner = "gdodd1977/claude-ado-companion"
 $assetBase = "https://github.com/$repoOwner/releases/latest/download"
 $assets    = @("ClaudeAdoCompanion.exe", "appsettings.json")
 
+# Error handling: git/az commands are checked via $LASTEXITCODE after each call.
+# Invoke-WebRequest uses try/catch. Prerequisite checks use -ErrorAction SilentlyContinue
+# so individual failures don't abort the report.
+
 # ── Helpers ────────────────────────────────────────────────────────────────
 
 function Write-Banner {
@@ -181,6 +185,34 @@ function Write-NextSteps {
     Write-Host ""
 }
 
+function Invoke-UpdateFlow {
+    param([string]$InstallDir, [switch]$IncludeShortcutPrompt)
+
+    Write-Banner "Claude ADO Companion - Update"
+
+    $proc = Get-Process ClaudeAdoCompanion -ErrorAction SilentlyContinue
+    if ($proc) {
+        Write-Host "  Stopping running instance ... " -NoNewline
+        $proc | Stop-Process -Force
+        Write-Host "OK" -ForegroundColor Green
+    }
+
+    Write-Host "  Pulling latest changes ... " -NoNewline
+    $pullOutput = git pull 2>&1
+    if ($LASTEXITCODE -eq 0) { Write-Host "OK" -ForegroundColor Green }
+    else {
+        Write-Host "WARNING" -ForegroundColor Yellow
+        Write-Host "    $pullOutput" -ForegroundColor Yellow
+    }
+
+    Write-Host ""
+    Write-Host "  Downloading latest release:" -ForegroundColor Cyan
+    Install-ReleaseAssets -TargetDir $InstallDir
+    Test-Prerequisites
+    if ($IncludeShortcutPrompt) { Invoke-ShortcutPrompt -InstallDir $InstallDir }
+    Write-NextSteps -InstallDir $InstallDir
+}
+
 # ── Main ───────────────────────────────────────────────────────────────────
 
 # Determine context: are we inside an existing clone?
@@ -190,34 +222,7 @@ Push-Location $scriptDir
 
 if (Test-InsideRepo) {
     # ── UPDATE MODE ────────────────────────────────────────────────────
-    Write-Banner "Claude ADO Companion - Update"
-
-    # Stop running instance so the exe can be overwritten
-    $proc = Get-Process ClaudeAdoCompanion -ErrorAction SilentlyContinue
-    if ($proc) {
-        Write-Host "  Stopping running instance ... " -NoNewline
-        $proc | Stop-Process -Force
-        Write-Host "OK" -ForegroundColor Green
-    }
-
-    # Pull latest repo (skills, docs, etc.)
-    Write-Host "  Pulling latest changes ... " -NoNewline
-    $pullOutput = git pull 2>&1
-    if ($LASTEXITCODE -eq 0) {
-        Write-Host "OK" -ForegroundColor Green
-    }
-    else {
-        Write-Host "WARNING" -ForegroundColor Yellow
-        Write-Host "    $pullOutput" -ForegroundColor Yellow
-    }
-
-    # Re-download release assets
-    Write-Host ""
-    Write-Host "  Downloading latest release:" -ForegroundColor Cyan
-    Install-ReleaseAssets -TargetDir $scriptDir
-
-    Test-Prerequisites
-    Write-NextSteps -InstallDir $scriptDir
+    Invoke-UpdateFlow -InstallDir $scriptDir
 }
 else {
     # ── FRESH INSTALL ──────────────────────────────────────────────────
@@ -249,30 +254,9 @@ else {
     if (Test-Path (Join-Path $installDir ".git")) {
         Write-Host ""
         Write-Host "  Directory already contains a git repo. Switching to update mode." -ForegroundColor Yellow
-        Set-Location $installDir
-        # Re-run as update (recursive call with correct location)
         Pop-Location
         Push-Location $installDir
-        # Pull + download inline (same as update mode)
-        $proc = Get-Process ClaudeAdoCompanion -ErrorAction SilentlyContinue
-        if ($proc) {
-            Write-Host "  Stopping running instance ... " -NoNewline
-            $proc | Stop-Process -Force
-            Write-Host "OK" -ForegroundColor Green
-        }
-        Write-Host "  Pulling latest changes ... " -NoNewline
-        $pullOutput = git pull 2>&1
-        if ($LASTEXITCODE -eq 0) { Write-Host "OK" -ForegroundColor Green }
-        else {
-            Write-Host "WARNING" -ForegroundColor Yellow
-            Write-Host "    $pullOutput" -ForegroundColor Yellow
-        }
-        Write-Host ""
-        Write-Host "  Downloading latest release:" -ForegroundColor Cyan
-        Install-ReleaseAssets -TargetDir $installDir
-        Test-Prerequisites
-        Invoke-ShortcutPrompt -InstallDir $installDir
-        Write-NextSteps -InstallDir $installDir
+        Invoke-UpdateFlow -InstallDir $installDir -IncludeShortcutPrompt
         Pop-Location
         return
     }
