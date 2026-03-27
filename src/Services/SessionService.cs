@@ -174,7 +174,7 @@ public class SessionService : ISessionService
         return Task.FromResult(messages);
     }
 
-    public string? GetActiveSessionId()
+    public string? GetActiveSessionId(DateTimeOffset? createdAfter = null)
     {
         var dir = _resolvedProjectsPath;
         if (!Directory.Exists(dir))
@@ -182,23 +182,40 @@ public class SessionService : ISessionService
             return null;
         }
 
-        var mostRecent = Directory.GetFiles(dir, "*.jsonl")
+        // Find the most recently modified triage session.
+        // ScanSessionFile only matches sessions whose FIRST user message contains
+        // a triage command, so interactive sessions won't match even if they
+        // discuss triage.
+        var files = Directory.GetFiles(dir, "*.jsonl")
             .Select(f => new FileInfo(f))
-            .OrderByDescending(f => f.LastWriteTimeUtc)
-            .FirstOrDefault();
+            .Where(f => DateTimeOffset.UtcNow - f.LastWriteTimeUtc < TimeSpan.FromMinutes(5));
 
-        if (mostRecent == null)
+        // If a launch timestamp is provided, only consider sessions created after it.
+        // This prevents matching old triage sessions from previous runs.
+        if (createdAfter.HasValue)
         {
-            return null;
+            files = files.Where(f => new DateTimeOffset(f.CreationTimeUtc, TimeSpan.Zero) >= createdAfter.Value);
         }
 
-        // Only consider "active" if modified within the last 5 minutes
-        if (DateTimeOffset.UtcNow - mostRecent.LastWriteTimeUtc > TimeSpan.FromMinutes(5))
+        var candidates = files.OrderByDescending(f => f.LastWriteTimeUtc);
+
+        foreach (var file in candidates)
         {
-            return null;
+            try
+            {
+                var (isTriageSession, _) = ScanSessionFile(file.FullName);
+                if (isTriageSession)
+                {
+                    return Path.GetFileNameWithoutExtension(file.Name);
+                }
+            }
+            catch
+            {
+                continue;
+            }
         }
 
-        return Path.GetFileNameWithoutExtension(mostRecent.Name);
+        return null;
     }
 
     public async IAsyncEnumerable<SessionMessage> StreamSessionAsync(
@@ -214,10 +231,13 @@ public class SessionService : ISessionService
 
         long lastPosition = 0;
         var seenLines = new HashSet<int>(); // Track line hashes to avoid duplicates
+        int stalePollCount = 0;
+        const int maxStalePollsBeforeComplete = 120; // 120 * 500ms = 60 seconds of no new content
 
         while (!cancellationToken.IsCancellationRequested)
         {
             var newMessages = new List<SessionMessage>();
+            bool hasNewContent = false;
 
             try
             {
@@ -240,6 +260,7 @@ public class SessionService : ISessionService
                     }
 
                     seenLines.Add(lineHash);
+                    hasNewContent = true;
 
                     try
                     {
@@ -269,6 +290,22 @@ public class SessionService : ISessionService
             foreach (var msg in newMessages)
             {
                 yield return msg;
+            }
+
+            // Detect completion: if no new content for 10 seconds, the session is done
+            if (hasNewContent)
+            {
+                stalePollCount = 0;
+            }
+            else
+            {
+                stalePollCount++;
+                if (stalePollCount >= maxStalePollsBeforeComplete && lastPosition > 0)
+                {
+                    _logger.LogInformation("Session {SessionId} stream ending: no new content for {Seconds}s",
+                        sessionId, maxStalePollsBeforeComplete * 500 / 1000);
+                    yield break;
+                }
             }
 
             // Poll every 500ms for new content
@@ -308,25 +345,17 @@ public class SessionService : ISessionService
                 if (type == "user" && string.IsNullOrEmpty(preview))
                 {
                     preview = ExtractUserPreview(root);
-                }
 
-                // Check if this session contains triage content
-                if (line.Contains("triage-bug", StringComparison.OrdinalIgnoreCase) ||
-                    line.Contains("triage-bugs", StringComparison.OrdinalIgnoreCase))
-                {
-                    foundTriage = true;
-                }
+                    // Only consider it a triage session if the FIRST user message
+                    // contains a triage command. This prevents interactive sessions
+                    // (where the user discusses triage) from matching.
+                    if (preview.Contains("/triage-bug", StringComparison.OrdinalIgnoreCase) ||
+                        preview.Contains("/triage-bugs", StringComparison.OrdinalIgnoreCase))
+                    {
+                        foundTriage = true;
+                    }
 
-                // Optimization: once we have preview and found triage, stop scanning
-                if (foundTriage && !string.IsNullOrEmpty(preview))
-                {
-                    break;
-                }
-
-                // For non-triage mode, once we have preview we can stop
-                if (!string.IsNullOrEmpty(preview) && !foundTriage)
-                {
-                    // Read a few more lines to check for triage content
+                    break; // First user message is enough to decide
                 }
             }
             catch (JsonException)

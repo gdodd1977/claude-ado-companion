@@ -164,20 +164,20 @@ public class AdoService : IAdoService
 
     public Task RetriageAsync(int id)
     {
-        RunClaudeCodeFireAndForget($"-p \"/triage-bug {id} --force\"");
+        RunClaudeCodeFireAndForget($"-p \"/triage-bug {id} --force\"", appendConfig: true);
         return Task.CompletedTask;
     }
 
     public Task BatchTriageAsync(int max)
     {
-        RunClaudeCodeFireAndForget($"-p \"/triage-bugs --max={max}\"");
+        RunClaudeCodeFireAndForget($"-p \"/triage-bugs --max={max}\"", appendConfig: true);
         return Task.CompletedTask;
     }
 
     public Task TriageSelectedAsync(List<int> bugIds)
     {
         var idList = string.Join(" ", bugIds);
-        RunClaudeCodeFireAndForget($"-p \"For each of these bug IDs, run /triage-bug <id> --force: {idList}\"");
+        RunClaudeCodeFireAndForget($"-p \"For each of these bug IDs, run /triage-bug <id> --force: {idList}\"", appendConfig: true);
         return Task.CompletedTask;
     }
 
@@ -290,12 +290,27 @@ public class AdoService : IAdoService
         _httpClient.DefaultRequestHeaders.Authorization = new AuthenticationHeaderValue("Bearer", token);
     }
 
-    private void RunClaudeCodeFireAndForget(string arguments)
+    private void RunClaudeCodeFireAndForget(string arguments, bool appendConfig = false)
     {
+        var args = $"{arguments} --allowedTools \"Bash(az *)\"";
+
+        // Embed ADO config so Claude doesn't waste turns discovering it.
+        // Also tell it to skip writing status files (from user's CLAUDE.md).
+        if (appendConfig)
+        {
+            var configHint = $" --append-system-prompt \"ADO Configuration (already loaded, do NOT read appsettings files): " +
+                $"ADO_ORG={_settings.AdoOrg} | ADO_PROJECT={_settings.AdoProject} | " +
+                $"AREA_PATH={_settings.AreaPath} | COPILOT_USER_ID={_settings.CopilotUserId} | " +
+                $"REPO_PROJECT_GUID={_settings.RepoProjectGuid} | REPO_GUID={_settings.RepoGuid} | " +
+                $"BRANCH_REF={_settings.BranchRef} | " +
+                $"IMPORTANT: Do NOT write status files or last-status files. Just triage the bug and stop.\"";
+            args += configHint;
+        }
+
         var psi = new ProcessStartInfo
         {
             FileName = "cmd.exe",
-            Arguments = $"/c claude {arguments}",
+            Arguments = $"/c claude {args}",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,

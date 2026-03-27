@@ -429,6 +429,16 @@ function minimizeTriagePanel() {
 }
 
 function openTriageModal(isDemo) {
+  // Clean up any existing stream/poll from a previous run
+  if (triageEventSource) {
+    triageEventSource.close();
+    triageEventSource = null;
+  }
+  if (triagePollTimer) {
+    clearInterval(triagePollTimer);
+    triagePollTimer = null;
+  }
+
   const overlay = document.getElementById('triageModal');
   const status = document.getElementById('triageModalStatus');
   const body = document.getElementById('triageModalBody');
@@ -443,14 +453,16 @@ function openTriageModal(isDemo) {
     return;
   }
 
-  status.textContent = 'Starting...';
+  status.innerHTML = '<span class="spinner" style="display:inline-block;width:12px;height:12px;margin-right:6px;vertical-align:middle"></span> Starting...';
   body.innerHTML = '<div class="loading"><div class="spinner"></div> Waiting for Claude session to start...</div>';
 
+  // Record launch time so we only match sessions created after this point
+  const launchTime = Date.now();
   let pollCount = 0;
   triagePollTimer = setInterval(async () => {
     pollCount++;
     try {
-      const res = await fetch('/api/sessions/active').then(r => r.json());
+      const res = await fetch(`/api/sessions/active?after=${launchTime}`).then(r => r.json());
       if (res.active) {
         clearInterval(triagePollTimer);
         triagePollTimer = null;
@@ -480,7 +492,7 @@ function connectTriageStream(sessionId) {
     try {
       const msg = JSON.parse(event.data);
       triageMessageCount++;
-      status.textContent = `Streaming: ${triageMessageCount} messages`;
+      status.innerHTML = `<span class="spinner" style="display:inline-block;width:12px;height:12px;margin-right:6px;vertical-align:middle"></span> Analyzing: ${triageMessageCount} messages`;
 
       body.insertAdjacentHTML('beforeend', renderMessage(msg, triageMessageCount));
       body.scrollTop = body.scrollHeight;
@@ -491,12 +503,12 @@ function connectTriageStream(sessionId) {
 
   triageEventSource.onerror = () => {
     if (triageEventSource && triageEventSource.readyState === EventSource.CLOSED) {
-      status.textContent = `Complete — ${triageMessageCount} messages`;
+      status.textContent = `Complete - ${triageMessageCount} messages`;
       showToast('Triage complete! Bug list updated.', 'success');
       triageEventSource = null;
       loadBugs();
     } else {
-      status.textContent = `Streaming: ${triageMessageCount} messages (reconnecting...)`;
+      status.innerHTML = `<span class="spinner" style="display:inline-block;width:12px;height:12px;margin-right:6px;vertical-align:middle"></span> Analyzing: ${triageMessageCount} messages (reconnecting...)`;
     }
   };
 }

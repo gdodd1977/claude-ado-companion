@@ -53,8 +53,8 @@ If no bug ID is provided, ask the user: "Please provide a bug work item ID to tr
 
 Before doing anything else, read the app configuration to get ADO connection details.
 
-1. Look for `appsettings.local.json` in the `src/` directory. If it exists, read it.
-2. Fall back to `appsettings.json` in the `src/` directory.
+1. Look for `appsettings.local.json` in the repo root. If it exists, read it.
+2. Fall back to `appsettings.json` in the repo root.
 3. Extract the `Dashboard` section and note these values:
    - `ADO_ORG` = `Dashboard.AdoOrg` (e.g., `https://dev.azure.com/myorg`)
    - `ADO_PROJECT` = `Dashboard.AdoProject` (e.g., `MyProject`)
@@ -76,7 +76,7 @@ az config set core.only_show_errors=true 2>nul
 
 Use the Azure CLI to get full bug details (using config values from Step 0):
 ```bash
-az boards work-item show --id <bug-id> --expand all --org <ADO_ORG> --project <ADO_PROJECT> -o json
+az boards work-item show --id <bug-id> --expand all --org <ADO_ORG> -o json
 ```
 
 **Extract and note the following fields:**
@@ -221,7 +221,7 @@ Determine which new tags to add based on triage results:
 **Merge with existing tags** - do NOT overwrite. Parse existing `System.Tags` (semicolon-separated), add new tags that aren't already present, join back with `; `.
 
 ```bash
-az boards work-item update --id <bug-id> --fields "System.Tags=<merged-tags>" --org <ADO_ORG> --project <ADO_PROJECT>
+az boards work-item update --id <bug-id> --fields "System.Tags=<merged-tags>" --org <ADO_ORG>
 ```
 
 ### 5b: Assign to Copilot and link branch (Copilot Ready only)
@@ -230,7 +230,7 @@ If the Copilot Readiness classification is **Copilot Ready** (score >= 75, no bl
 
 **Assign to Copilot:**
 ```bash
-az boards work-item update --id <bug-id> --fields "System.AssignedTo=<COPILOT_USER_ID>" --org <ADO_ORG> --project <ADO_PROJECT>
+az boards work-item update --id <bug-id> --fields "System.AssignedTo=<COPILOT_USER_ID>" --org <ADO_ORG>
 ```
 
 **Link the branch** (only if `REPO_PROJECT_GUID` and `REPO_GUID` are configured) using the ADO REST API to add a branch artifact link:

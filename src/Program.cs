@@ -239,13 +239,14 @@ app.MapGet("/api/claude/status", async () =>
         return Results.Ok(new { installed = true, authenticated = true });
     }
 
-    // Check if Claude CLI is installed and authenticated by running a quick command
+    // Check if Claude CLI is installed and authenticated via "claude auth status"
+    // (does not create a session log, unlike "claude -p ...")
     try
     {
         var psi = new ProcessStartInfo
         {
             FileName = "cmd.exe",
-            Arguments = "/c claude -p \"respond with just the word ok\" --max-turns 1",
+            Arguments = "/c claude auth status",
             RedirectStandardOutput = true,
             RedirectStandardError = true,
             UseShellExecute = false,
@@ -261,7 +262,7 @@ app.MapGet("/api/claude/status", async () =>
         var stdout = await process.StandardOutput.ReadToEndAsync();
         await process.WaitForExitAsync();
 
-        if (process.ExitCode == 0)
+        if (process.ExitCode == 0 && stdout.Contains("\"loggedIn\": true", StringComparison.OrdinalIgnoreCase))
         {
             claudeAuthVerified = true;
             return Results.Ok(new { installed = true, authenticated = true });
@@ -307,9 +308,12 @@ app.MapPost("/api/claude/launch-auth", () =>
 
 // === Session Endpoints (used by triage panel) ===
 
-app.MapGet("/api/sessions/active", (ISessionService sessionService) =>
+app.MapGet("/api/sessions/active", (ISessionService sessionService, long? after) =>
 {
-    var id = sessionService.GetActiveSessionId();
+    DateTimeOffset? afterTime = after.HasValue
+        ? DateTimeOffset.FromUnixTimeMilliseconds(after.Value)
+        : null;
+    var id = sessionService.GetActiveSessionId(afterTime);
     return id == null
         ? Results.Json(new { active = false })
         : Results.Json(new { active = true, id });

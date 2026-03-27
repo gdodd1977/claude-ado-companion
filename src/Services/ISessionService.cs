@@ -8,7 +8,7 @@ public interface ISessionService
 
     Task<List<SessionMessage>> GetSessionAsync(string sessionId);
 
-    string? GetActiveSessionId();
+    string? GetActiveSessionId(DateTimeOffset? createdAfter = null);
 
     IAsyncEnumerable<SessionMessage> StreamSessionAsync(string sessionId, CancellationToken cancellationToken);
 }
