@@ -10,8 +10,8 @@ A generic Azure DevOps bug triage companion powered by Claude Code. Connect it t
 
 - [Prerequisites](#prerequisites)
 - [Quick Start](#quick-start)
-  - [Option A: Download a release](#option-a-download-a-release-recommended)
-  - [Option B: Build from source](#option-b-build-from-source)
+  - [Install](#install)
+  - [Build from source](#build-from-source)
   - [First-run setup](#first-run-setup)
     - [Required settings](#required-settings)
     - [Optional settings (for Copilot assignment)](#optional-settings-for-copilot-assignment)
@@ -34,46 +34,36 @@ A generic Azure DevOps bug triage companion powered by Claude Code. Connect it t
 
 | Prerequisite | Required for | Install |
 |---|---|---|
-| [GitHub CLI](https://cli.github.com/) | Downloading releases | `winget install --id GitHub.cli -e`, then `gh auth login` |
 | [Azure CLI](https://learn.microsoft.com/cli/azure/install-azure-cli-windows) | Dashboard + triage | `winget install --id Microsoft.AzureCLI -e` |
 | Azure login | Dashboard + triage | `az login` (needs access to your ADO organization) |
 | [Claude Code CLI](https://docs.anthropic.com/en/docs/claude-code/overview) | Triage skills | `npm install -g @anthropic-ai/claude-code` (requires Node.js 18+) |
 
-Run the prerequisite checker to verify your setup:
-
-```powershell
-powershell -ExecutionPolicy Bypass -File install.ps1
-```
-
-It checks each prerequisite and prints what's ready vs what needs attention. It does **not** install anything automatically.
+The installer checks these automatically and tells you what's missing.
 
 ## Quick Start
 
-### Option A: Download a release (recommended)
+### Install
 
-For best results, download the release **into the repo directory** so the triage panel can auto-detect Claude Code session logs. If run from elsewhere, it falls back to the most recently active Claude project.
-
-```powershell
-# Clone the repo (needed for Claude Code skills)
-git clone https://github.com/gdodd1977/claude-ado-companion.git
-cd claude-ado-companion
-
-# Download the latest release assets into the repo
-gh release download --repo gdodd1977/claude-ado-companion --pattern "*" --dir .
-```
-
-Then run the exe directly:
+Run the one-liner in PowerShell:
 
 ```powershell
-.\ClaudeAdoCompanion.exe
+irm https://raw.githubusercontent.com/gdodd1977/claude-ado-companion/main/install.ps1 | iex
 ```
 
-### Option B: Build from source
+This clones the repo (needed for Claude Code triage skills), downloads the latest release, checks prerequisites, and optionally creates shortcuts.
+
+> **Alternative:** Download `install.ps1` from the [latest release](https://github.com/gdodd1977/claude-ado-companion/releases/latest) and run it:
+> ```powershell
+> powershell -ExecutionPolicy Bypass -File install.ps1
+> ```
+
+### Build from source
 
 Requires [.NET 9 SDK](https://dot.net/download).
 
 ```powershell
-cd src
+git clone https://github.com/gdodd1977/claude-ado-companion.git
+cd claude-ado-companion/src
 dotnet run
 ```
 
@@ -210,26 +200,20 @@ The toast notification tells you exactly what happened. If the Copilot User ID i
 
 ## Updating
 
-To update an existing install to the latest release:
+Re-run the installer from inside your install directory:
 
 ```powershell
 cd claude-ado-companion
-
-# Stop the running instance (Windows can't overwrite a locked exe)
-Get-Process ClaudeAdoCompanion -ErrorAction SilentlyContinue | Stop-Process -Force
-
-# Remove the old exe, then download the latest release
-Remove-Item .\ClaudeAdoCompanion.exe -Force
-gh release download --repo gdodd1977/claude-ado-companion --pattern "*" --dir . --clobber
+powershell -ExecutionPolicy Bypass -File install.ps1
 ```
 
-Your settings (`appsettings.local.json`) are preserved across updates.
-
-To also pull the latest triage skills and source code:
+Or run the one-liner from anywhere — it detects the existing install and updates in place:
 
 ```powershell
-git pull
+irm https://raw.githubusercontent.com/gdodd1977/claude-ado-companion/main/install.ps1 | iex
 ```
+
+This pulls the latest repo changes (skills, docs), re-downloads the exe, and checks prerequisites. Your settings (`appsettings.local.json`) are preserved.
 
 ## Demo Mode
 
