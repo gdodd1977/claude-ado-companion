@@ -291,4 +291,4 @@ gh release create v1.0.0 --repo gdodd1977/claude-ado-companion --title "v1.0.0" 
   install.ps1
 ```
 
-Users can then update by re-downloading the latest release.
+Users can then update by re-running the installer.
